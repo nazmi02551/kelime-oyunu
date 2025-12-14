@@ -730,6 +730,476 @@ const AdminSettings = ({ navigation }) => {
     </View>
   );
 
+  // =====================
+  // BAŞARIM YÖNETİMİ BİLEŞENİ
+  // =====================
+  const AchievementsManagement = () => {
+    const [achievements, setAchievements] = useState([]);
+    const [achievementLoading, setAchievementLoading] = useState(true);
+    const [editingAchievement, setEditingAchievement] = useState(null);
+    const [showAddForm, setShowAddForm] = useState(false);
+    const [newAchievement, setNewAchievement] = useState({
+      id: '', name: '', description: '', icon: '🏆', 
+      requirement_type: 'games_played', requirement_value: 1, 
+      reward_points: 100, active: true
+    });
+
+    useEffect(() => {
+      loadAchievements();
+    }, []);
+
+    const loadAchievements = async () => {
+      try {
+        setAchievementLoading(true);
+        const response = await api.get('/api/admin/achievements');
+        if (response.data.success) {
+          setAchievements(response.data.achievements || []);
+        }
+      } catch (error) {
+        console.error('Başarımlar yüklenemedi:', error);
+      } finally {
+        setAchievementLoading(false);
+      }
+    };
+
+    const saveAchievement = async (achievement) => {
+      try {
+        if (editingAchievement) {
+          await api.put(`/api/admin/achievements/${achievement.id}`, achievement);
+          Alert.alert('Başarılı', 'Başarım güncellendi');
+        } else {
+          await api.post('/api/admin/achievements', achievement);
+          Alert.alert('Başarılı', 'Başarım oluşturuldu');
+        }
+        setEditingAchievement(null);
+        setShowAddForm(false);
+        loadAchievements();
+      } catch (error) {
+        Alert.alert('Hata', error.response?.data?.error || 'İşlem başarısız');
+      }
+    };
+
+    const deleteAchievement = async (achievementId) => {
+      Alert.alert('Sil', 'Bu başarımı silmek istediğinize emin misiniz?', [
+        { text: 'İptal', style: 'cancel' },
+        {
+          text: 'Sil',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.delete(`/api/admin/achievements/${achievementId}`);
+              Alert.alert('Başarılı', 'Başarım silindi');
+              loadAchievements();
+            } catch (error) {
+              Alert.alert('Hata', 'Silme işlemi başarısız');
+            }
+          }
+        }
+      ]);
+    };
+
+    const AchievementForm = ({ data, onSave, onCancel }) => {
+      const [form, setForm] = useState(data);
+      
+      return (
+        <View style={styles.formContainer}>
+          <Text style={styles.formTitle}>{editingAchievement ? 'Başarım Düzenle' : 'Yeni Başarım'}</Text>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>ID (benzersiz)</Text>
+            <TextInput
+              style={styles.input}
+              value={form.id}
+              onChangeText={(v) => setForm({...form, id: v})}
+              placeholder="streak_20"
+              editable={!editingAchievement}
+            />
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>İsim</Text>
+            <TextInput
+              style={styles.input}
+              value={form.name}
+              onChangeText={(v) => setForm({...form, name: v})}
+              placeholder="Süper Seri"
+            />
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Açıklama</Text>
+            <TextInput
+              style={styles.input}
+              value={form.description}
+              onChangeText={(v) => setForm({...form, description: v})}
+              placeholder="20 doğru seri yap"
+            />
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>İkon (emoji)</Text>
+            <TextInput
+              style={styles.input}
+              value={form.icon}
+              onChangeText={(v) => setForm({...form, icon: v})}
+              placeholder="🔥"
+            />
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Gereksinim Tipi</Text>
+            <View style={styles.pickerContainer}>
+              {['games_played', 'total_score', 'best_streak', 'perfect_game', 'fast_answer', 'consecutive_days'].map((type) => (
+                <TouchableOpacity
+                  key={type}
+                  style={[styles.pickerOption, form.requirement_type === type && styles.pickerOptionActive]}
+                  onPress={() => setForm({...form, requirement_type: type})}
+                >
+                  <Text style={[styles.pickerOptionText, form.requirement_type === type && styles.pickerOptionTextActive]}>
+                    {type}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Hedef Değer</Text>
+            <TextInput
+              style={styles.input}
+              value={form.requirement_value?.toString()}
+              onChangeText={(v) => setForm({...form, requirement_value: parseInt(v) || 0})}
+              keyboardType="numeric"
+            />
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Ödül Puanı</Text>
+            <TextInput
+              style={styles.input}
+              value={form.reward_points?.toString()}
+              onChangeText={(v) => setForm({...form, reward_points: parseInt(v) || 0})}
+              keyboardType="numeric"
+            />
+          </View>
+          
+          <View style={styles.switchRow}>
+            <Text style={styles.switchLabel}>Aktif</Text>
+            <Switch
+              value={form.active}
+              onValueChange={(v) => setForm({...form, active: v})}
+              trackColor={{ false: colors.border, true: colors.success }}
+            />
+          </View>
+          
+          <View style={styles.formButtons}>
+            <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
+              <Text style={styles.cancelButtonText}>İptal</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.submitButton} onPress={() => onSave(form)}>
+              <Text style={styles.submitButtonText}>Kaydet</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    };
+
+    if (achievementLoading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>🏆 Başarım Yönetimi</Text>
+          <TouchableOpacity 
+            style={styles.addButton}
+            onPress={() => { setShowAddForm(true); setEditingAchievement(null); setNewAchievement({
+              id: '', name: '', description: '', icon: '🏆', 
+              requirement_type: 'games_played', requirement_value: 1, 
+              reward_points: 100, active: true
+            }); }}
+          >
+            <Text style={styles.addButtonText}>+ Ekle</Text>
+          </TouchableOpacity>
+        </View>
+
+        {(showAddForm || editingAchievement) && (
+          <AchievementForm 
+            data={editingAchievement || newAchievement}
+            onSave={saveAchievement}
+            onCancel={() => { setShowAddForm(false); setEditingAchievement(null); }}
+          />
+        )}
+
+        {achievements.map((achievement) => (
+          <View key={achievement.id} style={styles.itemCard}>
+            <View style={styles.itemHeader}>
+              <Text style={styles.itemIcon}>{achievement.icon}</Text>
+              <View style={styles.itemInfo}>
+                <Text style={styles.itemName}>{achievement.name}</Text>
+                <Text style={styles.itemDescription}>{achievement.description}</Text>
+                <Text style={styles.itemMeta}>
+                  {achievement.requirement_type}: {achievement.requirement_value} | Ödül: {achievement.reward_points} puan
+                </Text>
+              </View>
+              <View style={[styles.statusBadge, achievement.active ? styles.activeBadge : styles.inactiveBadge]}>
+                <Text style={styles.statusBadgeText}>{achievement.active ? 'Aktif' : 'Pasif'}</Text>
+              </View>
+            </View>
+            <View style={styles.itemActions}>
+              <TouchableOpacity style={styles.editButton} onPress={() => setEditingAchievement(achievement)}>
+                <Text style={styles.editButtonText}>✏️ Düzenle</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.deleteButton} onPress={() => deleteAchievement(achievement.id)}>
+                <Text style={styles.deleteButtonText}>🗑️ Sil</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
+  // =====================
+  // GÜNLÜK GÖREV YÖNETİMİ BİLEŞENİ
+  // =====================
+  const DailyTasksManagement = () => {
+    const [tasks, setTasks] = useState([]);
+    const [taskLoading, setTaskLoading] = useState(true);
+    const [editingTask, setEditingTask] = useState(null);
+    const [showAddForm, setShowAddForm] = useState(false);
+    const [newTask, setNewTask] = useState({
+      id: '', name: '', description: '', icon: '📋', 
+      task_type: 'games_played', target: 1, 
+      reward_points: 100, active: true
+    });
+
+    useEffect(() => {
+      loadTasks();
+    }, []);
+
+    const loadTasks = async () => {
+      try {
+        setTaskLoading(true);
+        const response = await api.get('/api/admin/daily-task-definitions');
+        if (response.data.success) {
+          setTasks(response.data.tasks || []);
+        }
+      } catch (error) {
+        console.error('Görevler yüklenemedi:', error);
+      } finally {
+        setTaskLoading(false);
+      }
+    };
+
+    const saveTask = async (task) => {
+      try {
+        if (editingTask) {
+          await api.put(`/api/admin/daily-task-definitions/${task.id}`, task);
+          Alert.alert('Başarılı', 'Görev tanımı güncellendi');
+        } else {
+          await api.post('/api/admin/daily-task-definitions', task);
+          Alert.alert('Başarılı', 'Görev tanımı oluşturuldu');
+        }
+        setEditingTask(null);
+        setShowAddForm(false);
+        loadTasks();
+      } catch (error) {
+        Alert.alert('Hata', error.response?.data?.error || 'İşlem başarısız');
+      }
+    };
+
+    const deleteTask = async (taskId) => {
+      Alert.alert('Sil', 'Bu görev tanımını silmek istediğinize emin misiniz?', [
+        { text: 'İptal', style: 'cancel' },
+        {
+          text: 'Sil',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.delete(`/api/admin/daily-task-definitions/${taskId}`);
+              Alert.alert('Başarılı', 'Görev tanımı silindi');
+              loadTasks();
+            } catch (error) {
+              Alert.alert('Hata', 'Silme işlemi başarısız');
+            }
+          }
+        }
+      ]);
+    };
+
+    const TaskForm = ({ data, onSave, onCancel }) => {
+      const [form, setForm] = useState(data);
+      
+      return (
+        <View style={styles.formContainer}>
+          <Text style={styles.formTitle}>{editingTask ? 'Görev Düzenle' : 'Yeni Görev'}</Text>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>ID (benzersiz)</Text>
+            <TextInput
+              style={styles.input}
+              value={form.id}
+              onChangeText={(v) => setForm({...form, id: v})}
+              placeholder="play_5_games"
+              editable={!editingTask}
+            />
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>İsim</Text>
+            <TextInput
+              style={styles.input}
+              value={form.name}
+              onChangeText={(v) => setForm({...form, name: v})}
+              placeholder="Beş Oyun"
+            />
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Açıklama</Text>
+            <TextInput
+              style={styles.input}
+              value={form.description}
+              onChangeText={(v) => setForm({...form, description: v})}
+              placeholder="5 oyun oyna"
+            />
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>İkon (emoji)</Text>
+            <TextInput
+              style={styles.input}
+              value={form.icon}
+              onChangeText={(v) => setForm({...form, icon: v})}
+              placeholder="🎮"
+            />
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Görev Tipi</Text>
+            <View style={styles.pickerContainer}>
+              {['games_played', 'correct_answers', 'score_earned', 'best_streak'].map((type) => (
+                <TouchableOpacity
+                  key={type}
+                  style={[styles.pickerOption, form.task_type === type && styles.pickerOptionActive]}
+                  onPress={() => setForm({...form, task_type: type})}
+                >
+                  <Text style={[styles.pickerOptionText, form.task_type === type && styles.pickerOptionTextActive]}>
+                    {type}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Hedef</Text>
+            <TextInput
+              style={styles.input}
+              value={form.target?.toString()}
+              onChangeText={(v) => setForm({...form, target: parseInt(v) || 0})}
+              keyboardType="numeric"
+            />
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Ödül Puanı</Text>
+            <TextInput
+              style={styles.input}
+              value={form.reward_points?.toString()}
+              onChangeText={(v) => setForm({...form, reward_points: parseInt(v) || 0})}
+              keyboardType="numeric"
+            />
+          </View>
+          
+          <View style={styles.switchRow}>
+            <Text style={styles.switchLabel}>Aktif</Text>
+            <Switch
+              value={form.active}
+              onValueChange={(v) => setForm({...form, active: v})}
+              trackColor={{ false: colors.border, true: colors.success }}
+            />
+          </View>
+          
+          <View style={styles.formButtons}>
+            <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
+              <Text style={styles.cancelButtonText}>İptal</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.submitButton} onPress={() => onSave(form)}>
+              <Text style={styles.submitButtonText}>Kaydet</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    };
+
+    if (taskLoading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>📋 Günlük Görev Yönetimi</Text>
+          <TouchableOpacity 
+            style={styles.addButton}
+            onPress={() => { setShowAddForm(true); setEditingTask(null); setNewTask({
+              id: '', name: '', description: '', icon: '📋', 
+              task_type: 'games_played', target: 1, 
+              reward_points: 100, active: true
+            }); }}
+          >
+            <Text style={styles.addButtonText}>+ Ekle</Text>
+          </TouchableOpacity>
+        </View>
+
+        {(showAddForm || editingTask) && (
+          <TaskForm 
+            data={editingTask || newTask}
+            onSave={saveTask}
+            onCancel={() => { setShowAddForm(false); setEditingTask(null); }}
+          />
+        )}
+
+        {tasks.map((task) => (
+          <View key={task.id} style={styles.itemCard}>
+            <View style={styles.itemHeader}>
+              <Text style={styles.itemIcon}>{task.icon}</Text>
+              <View style={styles.itemInfo}>
+                <Text style={styles.itemName}>{task.name}</Text>
+                <Text style={styles.itemDescription}>{task.description}</Text>
+                <Text style={styles.itemMeta}>
+                  {task.task_type}: {task.target} | Ödül: {task.reward_points} puan
+                </Text>
+              </View>
+              <View style={[styles.statusBadge, task.active ? styles.activeBadge : styles.inactiveBadge]}>
+                <Text style={styles.statusBadgeText}>{task.active ? 'Aktif' : 'Pasif'}</Text>
+              </View>
+            </View>
+            <View style={styles.itemActions}>
+              <TouchableOpacity style={styles.editButton} onPress={() => setEditingTask(task)}>
+                <Text style={styles.editButtonText}>✏️ Düzenle</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.deleteButton} onPress={() => deleteTask(task.id)}>
+                <Text style={styles.deleteButtonText}>🗑️ Sil</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
   const renderTabContent = () => {
     switch (activeTab) {
       case 'general':
@@ -738,6 +1208,10 @@ const AdminSettings = ({ navigation }) => {
         return <GameSettings />;
       case 'scoring':
         return <ScoringSettings />;
+      case 'achievements':
+        return <AchievementsManagement />;
+      case 'dailyTasks':
+        return <DailyTasksManagement />;
       case 'security':
         return <SecuritySettings />;
       case 'smtp':
@@ -791,6 +1265,8 @@ const AdminSettings = ({ navigation }) => {
             { key: 'general', label: '🌐 Genel', icon: '🌐' },
             { key: 'game', label: '🎮 Oyun', icon: '🎮' },
             { key: 'scoring', label: '⭐ Puanlama', icon: '⭐' },
+            { key: 'achievements', label: '🏆 Başarımlar', icon: '🏆' },
+            { key: 'dailyTasks', label: '📋 Görevler', icon: '📋' },
             { key: 'security', label: '🔒 Güvenlik', icon: '🔒' },
             { key: 'smtp', label: '📧 E-posta', icon: '📧' },
           ].map((tab) => (
@@ -1309,6 +1785,168 @@ const styles = StyleSheet.create({
     fontSize: responsiveFont(16),
     fontWeight: '600',
     color: colors.textPrimary,
+  },
+  // Başarım ve Görev Yönetimi Stilleri
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: responsivePadding(15),
+  },
+  addButton: {
+    backgroundColor: colors.success,
+    paddingHorizontal: responsivePadding(15),
+    paddingVertical: responsivePadding(8),
+    borderRadius: 8,
+  },
+  addButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: responsiveFont(14),
+  },
+  formContainer: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: responsivePadding(15),
+    marginBottom: responsivePadding(15),
+  },
+  formTitle: {
+    fontSize: responsiveFont(18),
+    fontWeight: 'bold',
+    color: colors.textPrimary,
+    marginBottom: responsivePadding(15),
+  },
+  pickerContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  pickerOption: {
+    backgroundColor: colors.background,
+    paddingHorizontal: responsivePadding(10),
+    paddingVertical: responsivePadding(6),
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  pickerOptionActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  pickerOptionText: {
+    fontSize: responsiveFont(11),
+    color: colors.textSecondary,
+  },
+  pickerOptionTextActive: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  formButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: responsivePadding(15),
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: colors.border,
+    paddingVertical: responsivePadding(12),
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  submitButton: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    paddingVertical: responsivePadding(12),
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  submitButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  itemCard: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: responsivePadding(15),
+    marginBottom: responsivePadding(10),
+  },
+  itemHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  itemIcon: {
+    fontSize: 32,
+    marginRight: responsivePadding(12),
+  },
+  itemInfo: {
+    flex: 1,
+  },
+  itemName: {
+    fontSize: responsiveFont(16),
+    fontWeight: 'bold',
+    color: colors.textPrimary,
+  },
+  itemDescription: {
+    fontSize: responsiveFont(12),
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  itemMeta: {
+    fontSize: responsiveFont(10),
+    color: colors.textMuted,
+    marginTop: 4,
+  },
+  statusBadge: {
+    paddingHorizontal: responsivePadding(8),
+    paddingVertical: responsivePadding(4),
+    borderRadius: 12,
+  },
+  activeBadge: {
+    backgroundColor: colors.success + '30',
+  },
+  inactiveBadge: {
+    backgroundColor: colors.border,
+  },
+  statusBadgeText: {
+    fontSize: responsiveFont(10),
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  itemActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: responsivePadding(12),
+    paddingTop: responsivePadding(12),
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  editButton: {
+    flex: 1,
+    backgroundColor: colors.primary + '20',
+    paddingVertical: responsivePadding(8),
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  editButtonText: {
+    color: colors.primary,
+    fontSize: responsiveFont(12),
+    fontWeight: '600',
+  },
+  deleteButton: {
+    flex: 1,
+    backgroundColor: colors.error + '20',
+    paddingVertical: responsivePadding(8),
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  deleteButtonText: {
+    color: colors.error,
+    fontSize: responsiveFont(12),
+    fontWeight: '600',
   },
 });
 

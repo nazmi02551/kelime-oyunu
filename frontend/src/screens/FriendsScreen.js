@@ -62,7 +62,8 @@ const FriendsScreen = ({ navigation }) => {
     try {
       const response = await api.get('/api/friends/requests');
       if (response.data.success) {
-        setRequests(response.data.requests || []);
+        // Backend 'pending' döndürüyor
+        setRequests(response.data.pending || []);
       }
     } catch (error) {
       console.error('İstekler yüklenemedi:', error);
@@ -212,16 +213,16 @@ const FriendsScreen = ({ navigation }) => {
       <View style={styles.requestInfo}>
         <Text style={styles.requestName}>{request.from_username}</Text>
         <Text style={styles.requestDate}>
-          {new Date(request.created_at).toLocaleDateString('tr-TR')}
+          {request.created_at ? new Date(request.created_at).toLocaleDateString('tr-TR') : ''}
         </Text>
       </View>
       <View style={styles.requestActions}>
         <TouchableOpacity 
           style={[styles.actionButton, styles.acceptButton]}
-          onPress={() => respondToRequest(request.friendship_id, true)}
-          disabled={processingId === request.friendship_id}
+          onPress={() => respondToRequest(request.request_id, true)}
+          disabled={processingId === request.request_id}
         >
-          {processingId === request.friendship_id ? (
+          {processingId === request.request_id ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
             <Text style={styles.actionButtonText}>✓</Text>
@@ -229,8 +230,8 @@ const FriendsScreen = ({ navigation }) => {
         </TouchableOpacity>
         <TouchableOpacity 
           style={[styles.actionButton, styles.rejectButton]}
-          onPress={() => respondToRequest(request.friendship_id, false)}
-          disabled={processingId === request.friendship_id}
+          onPress={() => respondToRequest(request.request_id, false)}
+          disabled={processingId === request.request_id}
         >
           <Text style={styles.actionButtonText}>✕</Text>
         </TouchableOpacity>
@@ -304,7 +305,7 @@ const FriendsScreen = ({ navigation }) => {
       case 'requests':
         return requests.length > 0 ? (
           requests.map((request, index) => (
-            <RequestCard key={request.friendship_id || index} request={request} />
+            <RequestCard key={request.request_id || index} request={request} />
           ))
         ) : (
           <View style={styles.emptyState}>

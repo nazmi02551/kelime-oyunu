@@ -6,65 +6,79 @@ class DailyTask:
     """
     Günlük görev sistemi.
     Her gün yeni görevler oluşturulur ve kullanıcılar tamamladıkça ödül kazanır.
+    Görev tanımları admin panelinden yönetilebilir.
     """
     
-    # Görev tanımları
-    TASK_DEFINITIONS = {
-        'PLAY_3_GAMES': {
-            'id': 'PLAY_3_GAMES',
-            'name': '3 Oyun Oyna',
-            'description': 'Bugün 3 oyun tamamla',
-            'icon': '🎮',
-            'target': 3,
-            'reward_type': 'score',
-            'reward_amount': 100,
-            'track_field': 'games_played'
-        },
-        'WIN_5_CORRECT': {
-            'id': 'WIN_5_CORRECT',
-            'name': '5 Doğru Cevap',
-            'description': 'Bugün 5 doğru cevap ver',
-            'icon': '✅',
-            'target': 5,
-            'reward_type': 'score',
-            'reward_amount': 75,
-            'track_field': 'correct_answers'
-        },
-        'EARN_500_POINTS': {
-            'id': 'EARN_500_POINTS',
-            'name': '500 Puan Kazan',
-            'description': 'Bugün toplam 500 puan kazan',
-            'icon': '💰',
-            'target': 500,
-            'reward_type': 'score',
-            'reward_amount': 150,
-            'track_field': 'score_earned'
-        },
-        'STREAK_3': {
-            'id': 'STREAK_3',
-            'name': '3\'lü Seri',
-            'description': 'Bugün 3 doğru cevap serisi yap',
-            'icon': '🔥',
-            'target': 3,
-            'reward_type': 'score',
-            'reward_amount': 100,
-            'track_field': 'best_streak'
-        },
-        'PLAY_1_GAME': {
-            'id': 'PLAY_1_GAME',
+    # Varsayılan görev tanımları (DB'de yoksa kullanılır)
+    DEFAULT_TASK_DEFINITIONS = {
+        'play_1_game': {
+            'id': 'play_1_game',
             'name': 'Günlük Oyun',
-            'description': 'Bugün en az 1 oyun oyna',
-            'icon': '📅',
+            'description': '1 oyun oyna',
+            'icon': '🎮',
+            'task_type': 'games_played',
             'target': 1,
-            'reward_type': 'score',
-            'reward_amount': 50,
-            'track_field': 'games_played'
+            'reward_points': 50,
+            'active': True
+        },
+        'play_3_games': {
+            'id': 'play_3_games',
+            'name': 'Üçleme',
+            'description': '3 oyun oyna',
+            'icon': '🎯',
+            'task_type': 'games_played',
+            'target': 3,
+            'reward_points': 100,
+            'active': True
+        },
+        'win_5_correct': {
+            'id': 'win_5_correct',
+            'name': 'Doğru Cevapçı',
+            'description': '5 doğru cevap ver',
+            'icon': '✅',
+            'task_type': 'correct_answers',
+            'target': 5,
+            'reward_points': 75,
+            'active': True
+        },
+        'earn_500_points': {
+            'id': 'earn_500_points',
+            'name': 'Puan Avcısı',
+            'description': '500 puan kazan',
+            'icon': '💰',
+            'task_type': 'score_earned',
+            'target': 500,
+            'reward_points': 150,
+            'active': True
+        },
+        'streak_3': {
+            'id': 'streak_3',
+            'name': 'Seri Başlangıcı',
+            'description': '3 doğru seri yap',
+            'icon': '🔥',
+            'task_type': 'best_streak',
+            'target': 3,
+            'reward_points': 100,
+            'active': True
         }
     }
     
     def __init__(self, db):
+        self.db = db
         self.collection = db.daily_tasks
         self.users = db.users
+        self.task_definitions_collection = db.daily_task_definitions
+    
+    def get_task_definitions(self):
+        """Admin'den tanımlanan görevleri getirir, yoksa varsayılanları kullanır."""
+        definitions = list(self.task_definitions_collection.find({'active': True}))
+        
+        if not definitions:
+            # DB'de tanım yoksa varsayılanları kullan
+            return self.DEFAULT_TASK_DEFINITIONS
+        
+        # Liste formatından dict formatına dönüştür
+        return {d['id']: d for d in definitions}
     
     def get_today_date(self):
         """Bugünün tarihini YYYY-MM-DD formatında döndürür."""
@@ -91,25 +105,29 @@ class DailyTask:
     
     def _create_daily_record(self, user_id, date):
         """Yeni günlük görev kaydı oluşturur."""
-        # Her gün için 3 rastgele görev seç
         import random
-        task_ids = list(self.TASK_DEFINITIONS.keys())
+        
+        # Admin'den tanımlanan görevleri al
+        task_definitions = self.get_task_definitions()
+        task_ids = list(task_definitions.keys())
+        
+        # Her gün için 3 rastgele görev seç
         selected_tasks = random.sample(task_ids, min(3, len(task_ids)))
         
         tasks = []
         for task_id in selected_tasks:
-            task_def = self.TASK_DEFINITIONS[task_id]
+            task_def = task_definitions[task_id]
             tasks.append({
                 'task_id': task_id,
-                'name': task_def['name'],
-                'description': task_def['description'],
-                'icon': task_def['icon'],
-                'target': task_def['target'],
+                'name': task_def.get('name', ''),
+                'description': task_def.get('description', ''),
+                'icon': task_def.get('icon', '📋'),
+                'target': task_def.get('target', 1),
                 'progress': 0,
                 'completed': False,
                 'reward_claimed': False,
-                'reward_type': task_def['reward_type'],
-                'reward_amount': task_def['reward_amount']
+                'reward_type': 'score',
+                'reward_amount': task_def.get('reward_points', 100)
             })
         
         record = {
@@ -172,11 +190,13 @@ class DailyTask:
         tasks = record.get('tasks', [])
         
         for i, task in enumerate(tasks):
-            task_def = self.TASK_DEFINITIONS.get(task['task_id'])
+            task_definitions = self.get_task_definitions()
+            task_def = task_definitions.get(task['task_id'])
             if not task_def:
                 continue
             
-            track_field = task_def['track_field']
+            # task_type veya track_field'ı al
+            track_field = task_def.get('task_type') or task_def.get('track_field', 'games_played')
             current_value = daily_stats.get(track_field, 0)
             
             # İlerlemeyi güncelle

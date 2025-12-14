@@ -64,12 +64,21 @@ def send_friend_request(current_user_id):
     """Arkadaşlık isteği gönderir."""
     try:
         data = request.get_json() or {}
+        to_username = data.get('to_username')
         to_user_id = data.get('to_user_id')
         
-        if not to_user_id:
-            return jsonify({'success': False, 'error': 'to_user_id gerekli'}), 400
-        
         db = current_app.db
+        
+        # Username ile geldiyse, user_id'ye çevir
+        if to_username and not to_user_id:
+            user = db.users.find_one({'username': to_username})
+            if not user:
+                return jsonify({'success': False, 'error': 'Kullanıcı bulunamadı'}), 404
+            to_user_id = str(user['_id'])
+        
+        if not to_user_id:
+            return jsonify({'success': False, 'error': 'to_user_id veya to_username gerekli'}), 400
+        
         friendship_model = Friendship(db)
         
         result = friendship_model.send_friend_request(current_user_id, to_user_id)
@@ -90,11 +99,11 @@ def respond_to_request(current_user_id):
     """Arkadaşlık isteğine yanıt verir."""
     try:
         data = request.get_json() or {}
-        request_id = data.get('request_id')
+        request_id = data.get('request_id') or data.get('friendship_id')
         accept = data.get('accept', True)
         
         if not request_id:
-            return jsonify({'success': False, 'error': 'request_id gerekli'}), 400
+            return jsonify({'success': False, 'error': 'request_id veya friendship_id gerekli'}), 400
         
         db = current_app.db
         friendship_model = Friendship(db)
@@ -118,11 +127,20 @@ def remove_friend(current_user_id):
     try:
         data = request.get_json() or {}
         friend_id = data.get('friend_id')
-        
-        if not friend_id:
-            return jsonify({'success': False, 'error': 'friend_id gerekli'}), 400
+        friend_username = data.get('friend_username')
         
         db = current_app.db
+        
+        # Username ile geldiyse, user_id'ye çevir
+        if friend_username and not friend_id:
+            user = db.users.find_one({'username': friend_username})
+            if not user:
+                return jsonify({'success': False, 'error': 'Kullanıcı bulunamadı'}), 404
+            friend_id = str(user['_id'])
+        
+        if not friend_id:
+            return jsonify({'success': False, 'error': 'friend_id veya friend_username gerekli'}), 400
+        
         friendship_model = Friendship(db)
         
         result = friendship_model.remove_friend(current_user_id, friend_id)
