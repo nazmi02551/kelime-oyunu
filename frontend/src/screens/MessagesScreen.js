@@ -174,7 +174,7 @@ const MessagesScreen = () => {
       <FlatList
         data={conversations}
         renderItem={renderConversation}
-        keyExtractor={(item) => item.conversation_id}
+        keyExtractor={(item, index) => item.conversation_id || `conv_${index}`}
         contentContainerStyle={conversations.length === 0 ? styles.emptyList : styles.list}
         ListEmptyComponent={renderEmptyComponent}
         refreshControl={

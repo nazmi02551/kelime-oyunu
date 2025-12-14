@@ -202,7 +202,7 @@ const ChatScreen = () => {
       formatDate(item.created_at) !== formatDate(messages[index + 1]?.created_at);
 
     return (
-      <View key={item._id}>
+      <View>
         {showDate && (
           <View style={styles.dateDivider}>
             <Text style={[styles.dateText, { color: theme.colors.textSecondary }]}>
@@ -284,7 +284,7 @@ const ChatScreen = () => {
           ref={flatListRef}
           data={messages}
           renderItem={renderMessage}
-          keyExtractor={(item) => item._id}
+          keyExtractor={(item, index) => item._id || `msg_${index}`}
           inverted
           contentContainerStyle={styles.messagesList}
           onEndReached={loadMore}
