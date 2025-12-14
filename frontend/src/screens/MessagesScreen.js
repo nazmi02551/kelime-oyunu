@@ -24,7 +24,7 @@ const MessagesScreen = () => {
 
   const fetchConversations = async () => {
     try {
-      const response = await api.get('/messages/conversations');
+      const response = await api.get('/api/messages/conversations');
       if (response.data.success) {
         setConversations(response.data.conversations || []);
       }
@@ -38,7 +38,7 @@ const MessagesScreen = () => {
 
   const fetchUnreadCount = async () => {
     try {
-      const response = await api.get('/messages/unread-count');
+      const response = await api.get('/api/messages/unread-count');
       if (response.data.success) {
         setUnreadCount(response.data.unread_count || 0);
       }

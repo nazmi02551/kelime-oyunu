@@ -40,7 +40,7 @@ const ChatScreen = () => {
   const initializeConversation = async () => {
     if (!conversationId && friendUsername) {
       try {
-        const response = await api.post(`/messages/start/${friendUsername}`);
+        const response = await api.post(`/api/messages/start/${friendUsername}`);
         if (response.data.success) {
           setConversationId(response.data.conversation_id);
           return response.data.conversation_id;
@@ -61,7 +61,7 @@ const ChatScreen = () => {
     
     try {
       const params = beforeId ? `?before_id=${beforeId}` : '';
-      const response = await api.get(`/messages/conversation/${convId}${params}`);
+      const response = await api.get(`/api/messages/conversation/${convId}${params}`);
       
       if (response.data.success) {
         const newMessages = response.data.messages || [];
@@ -85,7 +85,7 @@ const ChatScreen = () => {
   const pollForNewMessages = async () => {
     if (!conversationId) return;
     try {
-      const response = await api.get(`/messages/conversation/${conversationId}`);
+      const response = await api.get(`/api/messages/conversation/${conversationId}`);
       if (response.data.success) {
         const newMessages = response.data.messages || [];
         // Sadece yeni mesaj varsa güncelle
@@ -138,7 +138,7 @@ const ChatScreen = () => {
     setMessages(prev => [tempMessage, ...prev]);
     
     try {
-      const response = await api.post('/messages/send', {
+      const response = await api.post('/api/messages/send', {
         to_user_id: friendId,
         to_username: friendUsername,
         content: messageText
@@ -202,7 +202,7 @@ const ChatScreen = () => {
       formatDate(item.created_at) !== formatDate(messages[index + 1]?.created_at);
 
     return (
-      <View>
+      <View key={item._id}>
         {showDate && (
           <View style={styles.dateDivider}>
             <Text style={[styles.dateText, { color: theme.colors.textSecondary }]}>

@@ -139,6 +139,7 @@ const GameScreen = ({ navigation }) => {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [recentAchievements, setRecentAchievements] = useState([]);
   const [showAchievementNotification, setShowAchievementNotification] = useState(false);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
 
   // --- Sidebar API state ---
   const [kelimeIstatistikleri, setKelimeIstatistikleri] = useState(null);
@@ -154,6 +155,25 @@ const GameScreen = ({ navigation }) => {
       setOyunGecmisi([]);
     }
   }, [oyunBasladi]);
+
+  // Okunmamış mesaj sayısını getir
+  const fetchUnreadCount = useCallback(async () => {
+    try {
+      const response = await api.get('/api/messages/unread-count');
+      if (response.data.success) {
+        setUnreadMessageCount(response.data.unread_count || 0);
+      }
+    } catch (error) {
+      // Sessizce geç
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUnreadCount();
+    // Her 30 saniyede bir kontrol et
+    const interval = setInterval(fetchUnreadCount, 30000);
+    return () => clearInterval(interval);
+  }, [fetchUnreadCount]);
 
   // Sidebar verilerini fetch et
   useEffect(() => {
@@ -873,7 +893,14 @@ const GameScreen = ({ navigation }) => {
                     <TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50 }]} onPress={() => navigation.navigate('Friends')}><Text style={componentStyles.game.menuButtonText}>👥 Arkadaşlar</Text></TouchableOpacity>
                   </View>
                   <View style={[componentStyles.game.buttonRow, { flexDirection: 'row', gap: 10, width: '100%' }]}>
-                    <TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50 }]} onPress={() => navigation.navigate('Messages')}><Text style={componentStyles.game.menuButtonText}>💬 Mesajlar</Text></TouchableOpacity>
+                    <TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50, position: 'relative' }]} onPress={() => { navigation.navigate('Messages'); fetchUnreadCount(); }}>
+                      <Text style={componentStyles.game.menuButtonText}>💬 Mesajlar</Text>
+                      {unreadMessageCount > 0 && (
+                        <View style={{ position: 'absolute', top: -5, right: -5, backgroundColor: '#e74c3c', borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 5 }}>
+                          <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>{unreadMessageCount > 99 ? '99+' : unreadMessageCount}</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
                     <TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50 }]} onPress={() => navigation.navigate('Achievements')}><Text style={componentStyles.game.menuButtonText}>🏅 Başarımlar</Text></TouchableOpacity>
                   </View>
                   <View style={[componentStyles.game.buttonRow, { flexDirection: 'row', gap: 10, width: '100%' }]}>

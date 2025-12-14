@@ -15,14 +15,23 @@ def get_conversations(current_user_id):
         
         conversations = message_model.get_conversations(current_user_id)
         
-        # Datetime'ları string'e çevir
+        # Datetime'ları string'e çevir ve frontend formatına dönüştür
+        formatted_convs = []
         for conv in conversations:
-            if conv.get('last_message_at'):
-                conv['last_message_at'] = conv['last_message_at'].isoformat()
+            other_user = conv.get('other_user', {})
+            formatted_convs.append({
+                'conversation_id': conv.get('conversation_id'),
+                'friend_id': other_user.get('user_id'),
+                'friend_username': other_user.get('username'),
+                'last_message': conv.get('last_message', ''),
+                'last_message_at': conv.get('last_message_at').isoformat() if conv.get('last_message_at') else None,
+                'unread_count': conv.get('unread_count', 0),
+                'is_last_sender': conv.get('is_last_sender', False)
+            })
         
         return jsonify({
             'success': True,
-            'conversations': conversations
+            'conversations': formatted_convs
         })
         
     except Exception as e:
