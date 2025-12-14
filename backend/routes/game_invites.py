@@ -95,6 +95,26 @@ def respond_to_invite(current_user_id, invite_id):
         
         result = invite_model.respond_to_invite(current_user_id, invite_id, accept)
         
+        if result['success'] and accept:
+            # Multiplayer oyun oluştur
+            from models.multiplayer_game import MultiplayerGame
+            mp_game = MultiplayerGame(db)
+            
+            opponent = result.get('opponent', {})
+            game_settings = result.get('game_settings', {})
+            
+            game_result = mp_game.create_game(
+                opponent.get('user_id'),  # Daveti gönderen player1 olsun
+                current_user_id,           # Kabul eden player2 olsun
+                game_settings
+            )
+            
+            if game_result['success']:
+                result['game_id'] = game_result['game_id']
+                result['message'] = 'Davet kabul edildi, oyun başlatıldı!'
+            else:
+                result['warning'] = 'Oyun oluşturulamadı: ' + game_result.get('error', '')
+        
         if result['success']:
             return jsonify(result)
         else:

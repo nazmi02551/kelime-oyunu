@@ -14,6 +14,7 @@ import FriendsScreen from '../screens/FriendsScreen';
 import AchievementsScreen from '../screens/AchievementsScreen';
 import MessagesScreen from '../screens/MessagesScreen';
 import ChatScreen from '../screens/ChatScreen';
+import MultiplayerGameScreen from '../screens/MultiplayerGameScreen';
 import { AuthContext } from '../context/AuthContext';
 import { responsiveSize, responsiveFont } from '../utils/dimensions';
 import { colors } from '../utils/colors';
@@ -130,6 +131,13 @@ const AppNavigator = () => {
             <Stack.Screen 
               name="Chat" 
               component={ChatScreen} 
+              options={{ 
+                headerShown: false
+              }} 
+            />
+            <Stack.Screen 
+              name="MultiplayerGame" 
+              component={MultiplayerGameScreen} 
               options={{ 
                 headerShown: false
               }} 

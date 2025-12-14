@@ -141,6 +141,7 @@ const GameScreen = ({ navigation }) => {
   const [showAchievementNotification, setShowAchievementNotification] = useState(false);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   const [pendingInvites, setPendingInvites] = useState([]);
+  const [activeMultiplayerGames, setActiveMultiplayerGames] = useState([]);
 
   // --- Sidebar API state ---
   const [kelimeIstatistikleri, setKelimeIstatistikleri] = useState(null);
@@ -195,32 +196,51 @@ const GameScreen = ({ navigation }) => {
     }
   }, [oyunBasladi]);
 
+  // Aktif multiplayer oyunları getir
+  const fetchActiveMultiplayerGames = useCallback(async () => {
+    try {
+      const response = await api.get('/api/multiplayer/active');
+      if (response.data.success) {
+        setActiveMultiplayerGames(response.data.games || []);
+      }
+    } catch (error) {
+      // Sessizce geç
+    }
+  }, []);
+
   const respondToInvite = async (inviteId, accept) => {
     try {
       const response = await api.post(`/api/game-invites/respond/${inviteId}`, { accept });
       if (response.data.success) {
         setPendingInvites(prev => prev.filter(inv => inv.invite_id !== inviteId));
-        if (accept) {
-          // Kabul edildi, oyunu başlat
-          setGameMessage({ type: 'success', text: 'Davet kabul edildi! Oyun başlatılıyor...' });
-          oyunBaslat(response.data.game_settings);
+        if (accept && response.data.game_id) {
+          // Multiplayer oyuna yönlendir
+          setGameMessage({ type: 'success', text: 'Davet kabul edildi! Multiplayer oyuna yönlendiriliyorsunuz...' });
+          setTimeout(() => {
+            navigation.navigate('MultiplayerGame', { gameId: response.data.game_id });
+          }, 500);
+        } else if (accept) {
+          setGameMessage({ type: 'info', text: response.data.message || 'Davet kabul edildi!' });
         }
       }
     } catch (error) {
       console.error('Davet yanıt hatası:', error);
+      setGameMessage({ type: 'error', text: 'Davet işlemi başarısız' });
     }
   };
 
   useEffect(() => {
     fetchUnreadCount();
     fetchPendingInvites();
+    fetchActiveMultiplayerGames();
     // Her 30 saniyede bir kontrol et
     const interval = setInterval(() => {
       fetchUnreadCount();
       fetchPendingInvites();
+      fetchActiveMultiplayerGames();
     }, 30000);
     return () => clearInterval(interval);
-  }, [fetchUnreadCount, fetchPendingInvites]);
+  }, [fetchUnreadCount, fetchPendingInvites, fetchActiveMultiplayerGames]);
 
   // Sidebar verilerini fetch et
   useEffect(() => {
@@ -958,8 +978,25 @@ const GameScreen = ({ navigation }) => {
                     <TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50 }]} onPress={() => navigation.navigate('Achievements')}><Text style={componentStyles.game.menuButtonText}>🏅 Başarımlar</Text></TouchableOpacity>
                   </View>
                   <View style={[componentStyles.game.buttonRow, { flexDirection: 'row', gap: 10, width: '100%' }]}>
-                    <TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50 }]} onPress={() => navigation.navigate('Profile')}><Text style={componentStyles.game.menuButtonText}>👤 Profilim</Text></TouchableOpacity>
+                    <TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50, position: 'relative' }]} onPress={() => {
+                      if (activeMultiplayerGames.length > 0) {
+                        navigation.navigate('MultiplayerGame', { gameId: activeMultiplayerGames[0].game_id });
+                      } else {
+                        setGameMessage({ type: 'info', text: 'Aktif çok oyunculu oyun yok. Arkadaşlarınıza davet gönderin!' });
+                      }
+                    }}>
+                      <Text style={componentStyles.game.menuButtonText}>🎮 Aktif Oyunlar</Text>
+                      {activeMultiplayerGames.length > 0 && (
+                        <View style={{ position: 'absolute', top: -5, right: -5, backgroundColor: '#27ae60', borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 5 }}>
+                          <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>{activeMultiplayerGames.length}</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
                     <TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50 }]} onPress={() => navigation.navigate('Leaderboard')}><Text style={componentStyles.game.menuButtonText}>🏆 Liderlik</Text></TouchableOpacity>
+                  </View>
+                  <View style={[componentStyles.game.buttonRow, { flexDirection: 'row', gap: 10, width: '100%' }]}>
+                    <TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50 }]} onPress={() => navigation.navigate('Profile')}><Text style={componentStyles.game.menuButtonText}>👤 Profilim</Text></TouchableOpacity>
+                    <TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50 }]} onPress={() => navigation.navigate('Achievements')}><Text style={componentStyles.game.menuButtonText}>🏅 Başarımlar</Text></TouchableOpacity>
                   </View>
                   <View style={[componentStyles.game.buttonRow, { flexDirection: 'row', gap: 10, width: '100%' }]}>
                     {user?.is_admin && (<TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50 }]} onPress={() => navigation.navigate('AdminSettings')}><Text style={componentStyles.game.menuButtonText}>⚙️ Admin</Text></TouchableOpacity>)}

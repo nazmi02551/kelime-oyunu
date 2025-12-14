@@ -238,8 +238,20 @@ const FriendsScreen = ({ navigation }) => {
       const response = await api.post(`/api/game-invites/respond/${inviteId}`, { accept });
       if (response.data.success) {
         setGameInvites(prev => prev.filter(inv => inv.invite_id !== inviteId));
-        if (accept) {
-          Alert.alert('Başarılı', 'Davet kabul edildi! Oyun ekranından başlatabilirsiniz.');
+        if (accept && response.data.game_id) {
+          // Multiplayer oyuna yönlendir
+          Alert.alert(
+            '🎮 Oyun Başlıyor!',
+            'Rakibiniz hazır olduğunda oyun başlayacak.',
+            [
+              {
+                text: 'Oyuna Git',
+                onPress: () => navigation.navigate('MultiplayerGame', { gameId: response.data.game_id })
+              }
+            ]
+          );
+        } else if (accept) {
+          Alert.alert('Başarılı', response.data.message || 'Davet kabul edildi!');
         } else {
           Alert.alert('Bilgi', 'Davet reddedildi');
         }

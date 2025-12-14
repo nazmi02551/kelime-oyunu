@@ -150,6 +150,7 @@ class Message:
         result = []
         for msg in messages:
             result.append({
+                '_id': str(msg['_id']),
                 'message_id': str(msg['_id']),
                 'from_user': str(msg['from_user']),
                 'to_user': str(msg['to_user']),
