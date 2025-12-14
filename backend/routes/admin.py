@@ -31,7 +31,6 @@ def get_settings(current_user_id):
             settings = {
                 "min_harf": 4,
                 "max_harf": 10,
-                "base_time_per_question": 17,
                 "joker_costs": {"reveal_letter": 100, "reveal_half": 300, "skip_question": 400},
                 "max_harf_limit": 12,
                 "level_xp": 1000,

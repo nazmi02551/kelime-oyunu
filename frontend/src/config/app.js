@@ -1,4 +1,6 @@
 // frontend/src/config/app.js
+import { Platform } from 'react-native';
+
 class AppConfig {
   constructor() {
     this.config = {

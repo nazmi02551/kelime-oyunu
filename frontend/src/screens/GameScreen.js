@@ -25,8 +25,6 @@ import AchievementNotification from '../components/AchievementNotification';
 import { globalStyles, componentStyles } from '../styles/globalStyles';
 import { colors } from '../utils/colors';
 import soundManager from '../services/SoundManager';
-// achievementManager importunu düzeltiyoruz
-//import * as achievementManager from '../services/AchievementManager';
 import achievementManager from '../services/AchievementManager';
 import { handleApiError } from '../utils/errorHandler';
 import EventBus from '../services/EventBus';
@@ -756,20 +754,22 @@ const GameScreen = ({ navigation }) => {
   // Listen for admin settings changes and apply them live to active game
   useEffect(() => {
     const handleAdminSettingsUpdate = (newSettings) => {
-      console.log('Admin settings updated via EventBus, applying live changes:', newSettings);
+      console.log('✅ Admin settings updated via EventBus, applying live changes:', newSettings);
       
       // If game is active, update game-related settings
-      if (oyunDurumu && newSettings) {
-        // Apply base_time_per_question if changed
+      if (newSettings) {
+        // Apply base_time_per_question if changed - update state for next question
         if (newSettings.base_time_per_question && typeof newSettings.base_time_per_question === 'number') {
-          // Note: current question time won't change mid-game, but next question will use new time
-          console.log('New time per question will apply to next question:', newSettings.base_time_per_question);
+          setCevapSuresi(newSettings.base_time_per_question);
+          console.log('✅ Time per question updated to:', newSettings.base_time_per_question);
         }
         
-        // Apply points_per_question if changed
-        if (newSettings.base_points_per_question && typeof newSettings.base_points_per_question === 'number') {
-          console.log('New points per question will apply to next question:', newSettings.base_points_per_question);
-        }
+        // Show feedback to user that settings were updated
+        setGameMessage({
+          type: 'info',
+          text: '⚙️ Oyun ayarları güncellendi!',
+          duration: 2000
+        });
       }
     };
 
@@ -778,7 +778,7 @@ const GameScreen = ({ navigation }) => {
     return () => {
       EventBus.off('admin:settings-updated', handleAdminSettingsUpdate);
     };
-  }, [oyunDurumu]);
+  }, []);
 
   const SoundToggleButton = () => (
     <TouchableOpacity style={componentStyles.game.headerButton} onPress={toggleSound}>

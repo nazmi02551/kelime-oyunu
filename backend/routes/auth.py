@@ -39,6 +39,69 @@ def register():
     user_model.create_user(username, email, password, profile_data, preferences, is_admin=False)
     return jsonify({"message": "Kullanıcı başarıyla oluşturuldu"}), 201
 
+@auth_bp.route('/refresh', methods=['POST'])
+def refresh_token():
+    """
+    Mevcut token'ı yenileyerek yeni bir token döndürür.
+    Authorization header'dan mevcut token alınır.
+    """
+    auth_header = request.headers.get('Authorization', '')
+    token = None
+    if auth_header:
+        parts = auth_header.split()
+        if len(parts) >= 2:
+            token = parts[1]
+    
+    if not token:
+        return jsonify({"error": "Token eksik"}), 401
+
+    try:
+        # Mevcut token'ı decode et (expired olsa bile user_id'yi alalım)
+        try:
+            data_token = jwt.decode(token, Config.SECRET_KEY, algorithms=["HS256"])
+        except jwt.ExpiredSignatureError:
+            # Token expired ama hala decode edilebilir
+            data_token = jwt.decode(token, Config.SECRET_KEY, algorithms=["HS256"], options={"verify_exp": False})
+        except jwt.InvalidTokenError:
+            return jsonify({"error": "Geçersiz token"}), 401
+            
+        user_id = data_token.get('user_id')
+        if not user_id:
+            return jsonify({"error": "Token'da user_id bulunamadı"}), 401
+            
+        db = current_app.db
+        user_model = User(db)
+        user = user_model.find_by_id(user_id)
+        
+        if not user:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 404
+
+        # Yeni token oluştur
+        new_token = jwt.encode({
+            'user_id': str(user['_id']),
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+        }, Config.SECRET_KEY, algorithm="HS256")
+        
+        if isinstance(new_token, bytes):
+            new_token = new_token.decode('utf-8')
+
+        user_data = {
+            "id": str(user['_id']),
+            "username": user['username'],
+            "email": user['email'],
+            "is_admin": user.get('is_admin', False),
+            "profile": user.get('profile', {}),
+            "statistics": user.get('statistics', {}),
+            "preferences": user.get('preferences', {}),
+            "adaptive_difficulty": user.get('adaptive_difficulty', {})
+        }
+
+        return jsonify({"token": new_token, "user": user_data})
+        
+    except Exception as e:
+        print(f"❌ Token yenileme hatası: {e}")
+        return jsonify({"error": "Token yenileme başarısız"}), 401
+
 @auth_bp.route('/login', methods=['POST'])
 def login():
     data = request.get_json() or {}
