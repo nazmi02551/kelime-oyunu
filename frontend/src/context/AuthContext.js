@@ -1,8 +1,8 @@
 // frontend/src/context/AuthContext.js - GÜNCELLENMİŞ
-import React, { createContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useEffect, useCallback, useContext } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
-import eventBus from '../services/EventBus';
+import eventBus from './EventBus';
 
 export const AuthContext = createContext({
   user: null,
@@ -14,6 +14,15 @@ export const AuthContext = createContext({
   updateUserStats: async () => {},
   restored: false
 });
+
+// useAuth hook - export edildi
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);

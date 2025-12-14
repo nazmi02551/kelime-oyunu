@@ -4,9 +4,8 @@
 import AppConfig from './app';
 
 // Default API host (used immediately by services).
-// Reverted to dev-tunnel so remote devices can connect over the internet.
-// If you want to use LAN-ip instead, replace this with your machine IP.
-const DEFAULT_API_URL = 'https://c0b7xhsw-8081.euw.devtunnels.ms';
+// Localhost for local development
+const DEFAULT_API_URL = 'http://localhost:5000';
 
 const ENV = {
   apiUrl: DEFAULT_API_URL,

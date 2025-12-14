@@ -1,5 +1,5 @@
 // frontend/src/context/ThemeContext.js
-import React, { createContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Appearance } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { themes } from '../utils/colors';
@@ -10,6 +10,21 @@ export const ThemeContext = createContext({
   toggleTheme: () => {},
   setMode: () => {}
 });
+
+// useTheme hook
+export const useTheme = () => {
+  const context = useContext(ThemeContext);
+  if (!context) {
+    // Fallback if not wrapped in provider
+    return {
+      theme: themes.dark,
+      mode: 'dark',
+      toggleTheme: () => {},
+      setMode: () => {}
+    };
+  }
+  return context;
+};
 
 export const ThemeProvider = ({ children }) => {
   const system = Appearance.getColorScheme();

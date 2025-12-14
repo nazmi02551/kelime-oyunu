@@ -2,6 +2,7 @@
 import React from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { AuthProvider } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import AppNavigator from './navigation/AppNavigator';
 import { StatusBar } from 'expo-status-bar';
 
@@ -37,13 +38,15 @@ if (Platform.OS === 'web') {
 
 export default function App() {
   return (
-    <AuthProvider>
-      {/* Container düzeltildi */}
-      <View style={styles.container}>
-        <AppNavigator />
-        <StatusBar style="light" />
-      </View>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        {/* Container düzeltildi */}
+        <View style={styles.container}>
+          <AppNavigator />
+          <StatusBar style="light" />
+        </View>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

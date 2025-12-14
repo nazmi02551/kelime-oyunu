@@ -6,18 +6,14 @@ class AppConfig {
     this.config = {
       // API Base URL'ler - Öncelik sırasına göre
       apiUrls: [
-        // Development URL'leri
-        // Prefer the dev-tunnel host (8081) the user used previously so remote phones can reach API
-        'https://c0b7xhsw-8081.euw.devtunnels.ms/api',
-        'http://c0b7xhsw-8081.euw.devtunnels.ms/api',
+        // Localhost öncelikli
         'http://localhost:5000/api',
-        'http://192.168.18.6:5000/api',
         'http://127.0.0.1:5000/api',
+        'http://192.168.18.6:5000/api',
         
-        // Production/Test URL'leri
+        // Dev-tunnel URL'leri (telefon için)
         'https://c0b7xhsw-5000.euw.devtunnels.ms/api',
         'http://c0b7xhsw-5000.euw.devtunnels.ms/api',
-        // Buraya diğer URL'lerinizi ekleyin
       ],
       
       // App Ayarları

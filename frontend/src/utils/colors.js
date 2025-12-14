@@ -51,3 +51,41 @@ export const gradients = {
   ocean: ['#4facfe', '#00f2fe'],
   sunset: ['#fa709a', '#fee140']
 };
+
+// Theme definitions for ThemeContext
+export const themes = {
+  dark: {
+    colors: {
+      primary: '#667eea',
+      secondary: '#f093fb',
+      accent: '#4facfe',
+      background: '#0f0f23',
+      surface: '#1a1a2e',
+      card: '#16213e',
+      text: '#ffffff',
+      textSecondary: '#b8b8d0',
+      border: '#3a3a52',
+      success: '#10ac84',
+      warning: '#ee5a24',
+      error: '#ed4c67',
+      info: '#2e86de',
+    }
+  },
+  light: {
+    colors: {
+      primary: '#667eea',
+      secondary: '#f093fb',
+      accent: '#4facfe',
+      background: '#f5f5f5',
+      surface: '#ffffff',
+      card: '#ffffff',
+      text: '#2d3047',
+      textSecondary: '#6c757d',
+      border: '#e0e0e0',
+      success: '#10ac84',
+      warning: '#ee5a24',
+      error: '#ed4c67',
+      info: '#2e86de',
+    }
+  }
+};
