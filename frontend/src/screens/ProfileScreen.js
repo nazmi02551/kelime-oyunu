@@ -518,6 +518,31 @@ const ProfileScreen = ({ navigation }) => {
         <View style={styles.content}>
           {activeTab === 'profile' && (
             <>
+              {/* Hızlı Erişim Butonları */}
+              <View style={styles.quickAccessContainer}>
+                <TouchableOpacity 
+                  style={styles.quickAccessButton}
+                  onPress={() => navigation.navigate('DailyTasks')}
+                >
+                  <Text style={styles.quickAccessIcon}>📋</Text>
+                  <Text style={styles.quickAccessText}>Günlük Görevler</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.quickAccessButton}
+                  onPress={() => navigation.navigate('Friends')}
+                >
+                  <Text style={styles.quickAccessIcon}>👥</Text>
+                  <Text style={styles.quickAccessText}>Arkadaşlar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.quickAccessButton}
+                  onPress={() => navigation.navigate('Achievements')}
+                >
+                  <Text style={styles.quickAccessIcon}>🏆</Text>
+                  <Text style={styles.quickAccessText}>Başarımlar</Text>
+                </TouchableOpacity>
+              </View>
+
               <AdaptiveDifficultyCard user={user} />
               <RecentGamesCard user={user} />
               <FullAnswerHistoryCard />
@@ -792,6 +817,37 @@ const styles = StyleSheet.create({
         minHeight: '100vh',
       },
     }),
+  },
+  // Hızlı Erişim Butonları
+  quickAccessContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingHorizontal: 10,
+    marginBottom: 15,
+  },
+  quickAccessButton: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    flex: 1,
+    marginHorizontal: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  quickAccessIcon: {
+    fontSize: 28,
+    marginBottom: 5,
+  },
+  quickAccessText: {
+    color: colors.textPrimary,
+    fontSize: responsiveFont(11),
+    fontWeight: '600',
+    textAlign: 'center',
   },
   header: {
     paddingVertical: responsivePadding(20),

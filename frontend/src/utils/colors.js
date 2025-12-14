@@ -32,6 +32,8 @@ export const colors = {
   warning: '#ee5a24',
   error: '#ed4c67',
   info: '#2e86de',
+  danger: '#ff6b6b',
+  border: '#3a3a52',
   
   // Social Colors
   facebook: '#1877f2',

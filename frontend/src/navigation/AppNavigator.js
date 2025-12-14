@@ -9,6 +9,9 @@ import GameScreen from '../screens/GameScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import AdminSettings from '../screens/AdminSettings';
 import LeaderboardScreen from '../screens/LeaderboardScreen';
+import DailyTasksScreen from '../screens/DailyTasksScreen';
+import FriendsScreen from '../screens/FriendsScreen';
+import AchievementsScreen from '../screens/AchievementsScreen';
 import { AuthContext } from '../context/AuthContext';
 import { responsiveSize, responsiveFont } from '../utils/dimensions';
 import { colors } from '../utils/colors';
@@ -92,6 +95,27 @@ const AppNavigator = () => {
               options={{ 
                 title: '⚙️ Admin Ayarları',
                 headerBackTitle: 'Geri'
+              }} 
+            />
+            <Stack.Screen 
+              name="DailyTasks" 
+              component={DailyTasksScreen} 
+              options={{ 
+                headerShown: false
+              }} 
+            />
+            <Stack.Screen 
+              name="Friends" 
+              component={FriendsScreen} 
+              options={{ 
+                headerShown: false
+              }} 
+            />
+            <Stack.Screen 
+              name="Achievements" 
+              component={AchievementsScreen} 
+              options={{ 
+                headerShown: false
               }} 
             />
           </>

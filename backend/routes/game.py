@@ -345,27 +345,36 @@ def get_all_achievements(current_user_id):
         if not user:
             return jsonify({"error": "Kullanıcı bulunamadı"}), 404
         
-        user_achievement_ids = set(a.get('id') for a in user.get('achievements', []))
+        # Kullanıcının başarım ID'lerini al (hem string hem dict formatını destekle)
+        user_achievements = user.get('achievements', [])
+        user_achievement_ids = set()
+        for a in user_achievements:
+            if isinstance(a, dict):
+                user_achievement_ids.add(a.get('id'))
+            elif isinstance(a, str):
+                user_achievement_ids.add(a)
         
-        all_achievements = []
-        for achievement_id, achievement in ACHIEVEMENT_DEFINITIONS.items():
-            all_achievements.append({
-                'id': achievement['id'],
-                'name': achievement['name'],
-                'description': achievement['description'],
-                'icon': achievement['icon'],
-                'unlocked': achievement_id in user_achievement_ids
-            })
+        # Kullanıcı istatistiklerini al
+        stats = user.get('statistics', {})
         
         return jsonify({
-            "achievements": all_achievements,
+            "success": True,
+            "achievements": list(user_achievement_ids),
+            "stats": {
+                "total_score": stats.get('total_score', 0),
+                "games_played": stats.get('games_played', 0),
+                "best_streak": stats.get('longest_streak', 0),
+                "current_streak": stats.get('current_streak', 0),
+                "consecutive_days": stats.get('consecutive_days', 0),
+                "total_correct_answers": stats.get('total_correct_answers', 0),
+            },
             "unlocked_count": len(user_achievement_ids),
             "total_count": len(ACHIEVEMENT_DEFINITIONS)
         })
         
     except Exception as e:
         print(f"❌ Başarımlar alınırken hata: {e}")
-        return jsonify({"error": f"Sunucu hatası: {str(e)}"}), 500
+        return jsonify({"success": False, "error": f"Sunucu hatası: {str(e)}"}), 500
 # --- SIDEBAR API ENDPOINTS ---
 
 @game_bp.route('/word-statistics/<word_id>', methods=['GET'])

@@ -105,7 +105,7 @@ def get_overview_stats():
             'total_users': int(total_users),
             'active_today': int(active_today),
             'total_games': int(stats.get('total_games', 0)),
-            'average_score': float(stats.get('average_score', 0.0))
+            'average_score': int(round(stats.get('average_score', 0.0)))
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500

@@ -360,7 +360,7 @@ const AdminSettings = ({ navigation }) => {
           <Text style={styles.statLabel}>Toplam Oyun</Text>
         </View>
         <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{stats.average_score}</Text>
+          <Text style={styles.statNumber}>{Math.round(stats.average_score || 0)}</Text>
           <Text style={styles.statLabel}>Ortalama Puan</Text>
         </View>
       </View>
