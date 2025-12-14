@@ -18,6 +18,7 @@ import { AuthContext } from '../context/AuthContext';
 import api from '../services/api';
 import { globalStyles } from '../styles/globalStyles';
 import { colors } from '../utils/colors';
+import { achievementManager } from '../services/AchievementManager';
 
 const GradientView = ({ colors: gradientColors, style, children }) => {
   if (Platform.OS === 'web') {
@@ -678,16 +679,22 @@ const FriendsScreen = ({ navigation }) => {
                     <Text style={styles.profileSectionTitle}>
                       🏅 Başarımlar ({selectedProfile.achievements_count})
                     </Text>
-                    {selectedProfile.achievements.map((ach, index) => (
-                      <View key={ach.id || index} style={styles.achievementItem}>
-                        <Text style={styles.achievementName}>{ach.name}</Text>
-                        {ach.unlocked_at && (
-                          <Text style={styles.achievementDate}>
-                            {new Date(ach.unlocked_at).toLocaleDateString('tr-TR')}
-                          </Text>
-                        )}
-                      </View>
-                    ))}
+                    {selectedProfile.achievements.map((ach, index) => {
+                      const achDef = achievementManager.getDefinitions()[ach.id];
+                      return (
+                        <View key={ach.id || index} style={styles.achievementItem}>
+                          <Text style={styles.achievementIcon}>{achDef?.icon || '🏅'}</Text>
+                          <View style={styles.achievementInfo}>
+                            <Text style={styles.achievementName}>{achDef?.name || ach.name || ach.id}</Text>
+                            {ach.unlocked_at && (
+                              <Text style={styles.achievementDate}>
+                                {new Date(ach.unlocked_at).toLocaleDateString('tr-TR')}
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+                      );
+                    })}
                   </View>
                 )}
 
@@ -1161,21 +1168,28 @@ const styles = {
   },
   achievementItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: colors.background,
     borderRadius: 10,
     padding: 12,
     marginBottom: 8,
   },
+  achievementIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  achievementInfo: {
+    flex: 1,
+  },
   achievementName: {
     color: colors.textPrimary,
     fontSize: 14,
-    flex: 1,
+    fontWeight: '600',
   },
   achievementDate: {
     color: colors.textMuted,
     fontSize: 11,
+    marginTop: 2,
   },
   profileActions: {
     gap: 10,

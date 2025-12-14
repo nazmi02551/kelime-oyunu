@@ -886,6 +886,27 @@ achievementProgressText: {
     submitButton: { borderRadius: 12, overflow: 'hidden' },
     submitButtonText: { fontSize: responsiveFont(16), fontWeight: 'bold', color: colors.textPrimary },
     
+    // Sesli okuma ve mikrofon butonları
+    voiceButton: {
+      backgroundColor: colors.surface,
+      padding: responsivePadding(10),
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: colors.cardLight,
+      minWidth: 70,
+    },
+    voiceInputButton: {
+      backgroundColor: colors.primary,
+      padding: responsivePadding(12),
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      minWidth: 50,
+      minHeight: 50,
+    },
+    
     wordRevealContainer: {
       flex: 1,
       justifyContent: 'center',

@@ -18,6 +18,7 @@ import {
   StatusBar,
   Keyboard
 } from 'react-native';
+import * as Speech from 'expo-speech';
 import { AuthContext } from '../context/AuthContext';
 import api from '../services/api';
 import GameMessage from '../components/GameMessage';
@@ -142,6 +143,11 @@ const GameScreen = ({ navigation }) => {
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   const [pendingInvites, setPendingInvites] = useState([]);
   const [activeMultiplayerGames, setActiveMultiplayerGames] = useState([]);
+  
+  // Sesli okuma ve cevap state'leri
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isListening, setIsListening] = useState(false);
 
   // --- Sidebar API state ---
   const [kelimeIstatistikleri, setKelimeIstatistikleri] = useState(null);
@@ -208,6 +214,83 @@ const GameScreen = ({ navigation }) => {
     }
   }, []);
 
+  // Sesli okuma fonksiyonu - Türkçe TTS
+  const speakQuestion = useCallback(async (text) => {
+    if (!voiceEnabled || !text) return;
+    
+    try {
+      // Önceki konuşmayı durdur
+      await Speech.stop();
+      setIsSpeaking(true);
+      
+      await Speech.speak(text, {
+        language: 'tr-TR',
+        pitch: 1.0,
+        rate: 0.9,
+        onDone: () => setIsSpeaking(false),
+        onStopped: () => setIsSpeaking(false),
+        onError: () => setIsSpeaking(false),
+      });
+    } catch (error) {
+      console.error('Sesli okuma hatası:', error);
+      setIsSpeaking(false);
+    }
+  }, [voiceEnabled]);
+
+  // Sesli konuşmayı durdur
+  const stopSpeaking = useCallback(async () => {
+    try {
+      await Speech.stop();
+      setIsSpeaking(false);
+    } catch (error) {
+      console.error('Ses durdurma hatası:', error);
+    }
+  }, []);
+
+  // Sesli cevap dinleme fonksiyonu - Web Speech API (sadece web için)
+  const startVoiceRecognition = useCallback(async () => {
+    if (Platform.OS === 'web') {
+      // Web Speech API kullan
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        setGameMessage({ type: 'error', text: 'Tarayıcınız sesli girişi desteklemiyor' });
+        return;
+      }
+      
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'tr-TR';
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      
+      recognition.onstart = () => {
+        setIsListening(true);
+      };
+      
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        setTahmin(transcript.trim());
+        setIsListening(false);
+      };
+      
+      recognition.onerror = (event) => {
+        console.error('Ses tanıma hatası:', event.error);
+        setIsListening(false);
+        if (event.error === 'not-allowed') {
+          setGameMessage({ type: 'error', text: 'Mikrofon izni gerekli' });
+        }
+      };
+      
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+      
+      recognition.start();
+    } else {
+      // Native platformlar için expo-speech-recognition kullanılabilir
+      setGameMessage({ type: 'info', text: 'Sesli giriş şu an sadece web\'de desteklenmektedir' });
+    }
+  }, []);
+
   const respondToInvite = async (inviteId, accept) => {
     try {
       const response = await api.post(`/api/game-invites/respond/${inviteId}`, { accept });
@@ -241,6 +324,24 @@ const GameScreen = ({ navigation }) => {
     }, 30000);
     return () => clearInterval(interval);
   }, [fetchUnreadCount, fetchPendingInvites, fetchActiveMultiplayerGames]);
+
+  // Yeni soru geldiğinde otomatik sesli oku
+  useEffect(() => {
+    if (voiceEnabled && oyunDurumu?.soru_bilgisi && oyunBasladi && !showWordReveal) {
+      // Kısa bir gecikme ile oku (animasyonlar için)
+      const timer = setTimeout(() => {
+        speakQuestion(oyunDurumu.soru_bilgisi);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [oyunDurumu?.soru_sayaci, voiceEnabled, oyunBasladi, showWordReveal, speakQuestion]);
+
+  // Bileşen unmount olduğunda sesi durdur
+  useEffect(() => {
+    return () => {
+      Speech.stop();
+    };
+  }, []);
 
   // Sidebar verilerini fetch et
   useEffect(() => {
@@ -975,7 +1076,7 @@ const GameScreen = ({ navigation }) => {
                         </View>
                       )}
                     </TouchableOpacity>
-                    <TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50 }]} onPress={() => navigation.navigate('Achievements')}><Text style={componentStyles.game.menuButtonText}>🏅 Başarımlar</Text></TouchableOpacity>
+                    <TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50 }]} onPress={() => navigation.navigate('Leaderboard')}><Text style={componentStyles.game.menuButtonText}>🏆 Liderlik</Text></TouchableOpacity>
                   </View>
                   <View style={[componentStyles.game.buttonRow, { flexDirection: 'row', gap: 10, width: '100%' }]}>
                     <TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50, position: 'relative' }]} onPress={() => {
@@ -992,15 +1093,14 @@ const GameScreen = ({ navigation }) => {
                         </View>
                       )}
                     </TouchableOpacity>
-                    <TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50 }]} onPress={() => navigation.navigate('Leaderboard')}><Text style={componentStyles.game.menuButtonText}>🏆 Liderlik</Text></TouchableOpacity>
-                  </View>
-                  <View style={[componentStyles.game.buttonRow, { flexDirection: 'row', gap: 10, width: '100%' }]}>
-                    <TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50 }]} onPress={() => navigation.navigate('Profile')}><Text style={componentStyles.game.menuButtonText}>👤 Profilim</Text></TouchableOpacity>
                     <TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50 }]} onPress={() => navigation.navigate('Achievements')}><Text style={componentStyles.game.menuButtonText}>🏅 Başarımlar</Text></TouchableOpacity>
                   </View>
                   <View style={[componentStyles.game.buttonRow, { flexDirection: 'row', gap: 10, width: '100%' }]}>
+                    <TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50 }]} onPress={() => navigation.navigate('Profile')}><Text style={componentStyles.game.menuButtonText}>👤 Profilim</Text></TouchableOpacity>
                     {user?.is_admin && (<TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50 }]} onPress={() => navigation.navigate('AdminSettings')}><Text style={componentStyles.game.menuButtonText}>⚙️ Admin</Text></TouchableOpacity>)}
-                    <TouchableOpacity style={[componentStyles.game.menuButton, componentStyles.game.logoutButton, { flex: user?.is_admin ? 1 : 2, minHeight: 50 }]} onPress={doLogout}><Text style={componentStyles.game.menuButtonText}>🚪 Çıkış</Text></TouchableOpacity>
+                  </View>
+                  <View style={[componentStyles.game.buttonRow, { flexDirection: 'row', gap: 10, width: '100%' }]}>
+                    <TouchableOpacity style={[componentStyles.game.menuButton, componentStyles.game.logoutButton, { flex: 1, minHeight: 50 }]} onPress={doLogout}><Text style={componentStyles.game.menuButtonText}>🚪 Çıkış Yap</Text></TouchableOpacity>
                   </View>
                 </View>
               </View>
@@ -1067,6 +1167,22 @@ const GameScreen = ({ navigation }) => {
                   <View style={[componentStyles.game.infoCard, isMobile && { flex: 1 }]}><Text style={componentStyles.game.infoCardLabel}>KAZANÇ</Text><Text style={componentStyles.game.infoCardValue}>+{Math.max(0, mevcutKazanç)}</Text></View>
                 </View>
                 <Text style={componentStyles.game.questionInfo}>{oyunDurumu.soru_bilgisi}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 10 }}>
+                  <TouchableOpacity 
+                    style={[componentStyles.game.voiceButton, isSpeaking && { backgroundColor: colors.primary }]}
+                    onPress={() => isSpeaking ? stopSpeaking() : speakQuestion(oyunDurumu.soru_bilgisi)}
+                  >
+                    <Text style={{ fontSize: 24 }}>{isSpeaking ? '🔊' : '🔈'}</Text>
+                    <Text style={{ color: colors.textMuted, fontSize: 10, marginTop: 2 }}>{isSpeaking ? 'Durdur' : 'Sesli Oku'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[componentStyles.game.voiceButton, { paddingHorizontal: 15 }]}
+                    onPress={() => setVoiceEnabled(!voiceEnabled)}
+                  >
+                    <Text style={{ fontSize: 20 }}>{voiceEnabled ? '🔔' : '🔕'}</Text>
+                    <Text style={{ color: colors.textMuted, fontSize: 10, marginTop: 2 }}>{voiceEnabled ? 'Otomatik Açık' : 'Otomatik Kapalı'}</Text>
+                  </TouchableOpacity>
+                </View>
                 <TouchableOpacity 
                   style={componentStyles.game.wordDisplay} 
                   onPress={() => !tahminModu && butonaBasFonk()}
@@ -1092,7 +1208,16 @@ const GameScreen = ({ navigation }) => {
                   </View>
                 ) : (
                   <View style={[componentStyles.game.guessMode, isMobile && { flexDirection: 'column', gap: 10 }]}>
-                    <TextInput ref={tahminInputRef} style={[componentStyles.game.guessInput, isMobile && { width: '100%', fontSize: 16 }]} value={tahmin} onChangeText={setTahmin} placeholder='Kelimeyi tahmin edin...' placeholderTextColor={colors.textMuted} autoCapitalize='characters' autoCorrect={false} maxLength={oyunDurumu.mevcut_harf_sayisi || 10} onSubmitEditing={() => tahminGonder()} />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, width: isMobile ? '100%' : 'auto' }}>
+                      <TextInput ref={tahminInputRef} style={[componentStyles.game.guessInput, isMobile && { flex: 1, fontSize: 16 }]} value={tahmin} onChangeText={setTahmin} placeholder='Kelimeyi tahmin edin...' placeholderTextColor={colors.textMuted} autoCapitalize='characters' autoCorrect={false} maxLength={oyunDurumu.mevcut_harf_sayisi || 10} onSubmitEditing={() => tahminGonder()} />
+                      <TouchableOpacity 
+                        style={[componentStyles.game.voiceInputButton, isListening && { backgroundColor: colors.danger }]}
+                        onPress={startVoiceRecognition}
+                        disabled={isListening}
+                      >
+                        <Text style={{ fontSize: 24 }}>{isListening ? '🔴' : '🎤'}</Text>
+                      </TouchableOpacity>
+                    </View>
                     <TouchableOpacity style={[componentStyles.game.submitButton, isMobile && { width: '100%' }]} onPress={() => tahminGonder()} disabled={isSubmitting}><GradientView colors={[colors.success, colors.gameSuccess]} style={componentStyles.game.gradientButtonSmall}>{isSubmitting ? <ActivityIndicator color='#fff' /> : <Text style={componentStyles.game.submitButtonText}>✅ Gönder</Text>}</GradientView></TouchableOpacity>
                   </View>
                 )}
