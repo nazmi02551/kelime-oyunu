@@ -206,6 +206,16 @@ class Friendship:
         
         return results
     
+    def _check_friendship_exists(self, user_id, other_user_id):
+        """İki kullanıcının arkadaş olup olmadığını kontrol eder."""
+        friendship = self.collection.find_one({
+            '$or': [
+                {'from_user': ObjectId(user_id), 'to_user': ObjectId(other_user_id), 'status': self.STATUS_ACCEPTED},
+                {'from_user': ObjectId(other_user_id), 'to_user': ObjectId(user_id), 'status': self.STATUS_ACCEPTED}
+            ]
+        })
+        return friendship is not None
+    
     def _get_friendship_status(self, user_id, other_user_id):
         """İki kullanıcı arasındaki arkadaşlık durumunu getirir."""
         friendship = self.collection.find_one({

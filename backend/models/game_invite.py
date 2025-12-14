@@ -25,8 +25,8 @@ class GameInvite:
         """İki kullanıcının arkadaş olup olmadığını kontrol eder."""
         friendship = self.friendships.find_one({
             '$or': [
-                {'user_id': ObjectId(user1_id), 'friend_id': ObjectId(user2_id), 'status': 'accepted'},
-                {'user_id': ObjectId(user2_id), 'friend_id': ObjectId(user1_id), 'status': 'accepted'}
+                {'from_user': ObjectId(user1_id), 'to_user': ObjectId(user2_id), 'status': 'accepted'},
+                {'from_user': ObjectId(user2_id), 'to_user': ObjectId(user1_id), 'status': 'accepted'}
             ]
         })
         return friendship is not None
