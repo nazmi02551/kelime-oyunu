@@ -1,0 +1,29 @@
+# Python sanal ortam ve cache
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# Backend özel
+backend/.venv/
+backend/__pycache__/
+backend/logs/
+
+# Node.js bağımlılıkları
+frontend/node_modules/
+
+# Expo ve build klasörleri
+frontend/.expo/
+frontend/dist/
+frontend/build/
+
+# Ortam değişkenleri
+.env
+*.env
+
+# OS dosyaları
+.DS_Store
+Thumbs.db
