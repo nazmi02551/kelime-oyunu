@@ -188,4 +188,5 @@ class AchievementManager {
 
 // Singleton instance
 const achievementManager = new AchievementManager();
+export { achievementManager };
 export default achievementManager;

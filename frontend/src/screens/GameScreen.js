@@ -146,8 +146,10 @@ const GameScreen = ({ navigation }) => {
   
   // Sesli okuma ve cevap state'leri
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [voiceInputEnabled, setVoiceInputEnabled] = useState(true); // Varsayılan sesli giriş açık
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
 
   // --- Sidebar API state ---
   const [kelimeIstatistikleri, setKelimeIstatistikleri] = useState(null);
@@ -247,8 +249,10 @@ const GameScreen = ({ navigation }) => {
     }
   }, []);
 
-  // Sesli cevap dinleme fonksiyonu - Web Speech API (sadece web için)
+  // Sesli cevap dinleme fonksiyonu - Web ve Native destekli
   const startVoiceRecognition = useCallback(async () => {
+    if (isListening) return;
+    
     if (Platform.OS === 'web') {
       // Web Speech API kullan
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -257,39 +261,59 @@ const GameScreen = ({ navigation }) => {
         return;
       }
       
-      const recognition = new SpeechRecognition();
-      recognition.lang = 'tr-TR';
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      
-      recognition.onstart = () => {
-        setIsListening(true);
-      };
-      
-      recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        setTahmin(transcript.trim());
+      try {
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'tr-TR';
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognitionRef.current = recognition;
+        
+        recognition.onstart = () => {
+          setIsListening(true);
+        };
+        
+        recognition.onresult = (event) => {
+          const transcript = event.results[0][0].transcript;
+          setTahmin(transcript.trim().toUpperCase());
+          setIsListening(false);
+        };
+        
+        recognition.onerror = (event) => {
+          console.error('Ses tanıma hatası:', event.error);
+          setIsListening(false);
+          if (event.error === 'not-allowed') {
+            setGameMessage({ type: 'error', text: 'Mikrofon izni gerekli' });
+          } else if (event.error === 'no-speech') {
+            setGameMessage({ type: 'info', text: 'Ses algılanamadı, tekrar deneyin' });
+          }
+        };
+        
+        recognition.onend = () => {
+          setIsListening(false);
+        };
+        
+        recognition.start();
+      } catch (error) {
+        console.error('Ses tanıma başlatma hatası:', error);
         setIsListening(false);
-      };
-      
-      recognition.onerror = (event) => {
-        console.error('Ses tanıma hatası:', event.error);
-        setIsListening(false);
-        if (event.error === 'not-allowed') {
-          setGameMessage({ type: 'error', text: 'Mikrofon izni gerekli' });
-        }
-      };
-      
-      recognition.onend = () => {
-        setIsListening(false);
-      };
-      
-      recognition.start();
+      }
     } else {
-      // Native platformlar için expo-speech-recognition kullanılabilir
-      setGameMessage({ type: 'info', text: 'Sesli giriş şu an sadece web\'de desteklenmektedir' });
+      // Native platformlar için basit bir çözüm - kullanıcıya bilgi ver
+      // expo-speech-recognition kurulabilir ama şimdilik web'de çalışıyor
+      setGameMessage({ type: 'info', text: 'Mobilde sesli giriş için lütfen web sürümünü kullanın veya manuel yazın' });
     }
-  }, []);
+  }, [isListening]);
+
+  // Tahmin moduna geçildiğinde otomatik mikrofon başlat
+  useEffect(() => {
+    if (tahminModu && voiceInputEnabled && Platform.OS === 'web') {
+      // Kısa gecikme ile mikrofonu başlat
+      const timer = setTimeout(() => {
+        startVoiceRecognition();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [tahminModu, voiceInputEnabled, startVoiceRecognition]);
 
   const respondToInvite = async (inviteId, accept) => {
     try {
@@ -325,12 +349,12 @@ const GameScreen = ({ navigation }) => {
     return () => clearInterval(interval);
   }, [fetchUnreadCount, fetchPendingInvites, fetchActiveMultiplayerGames]);
 
-  // Yeni soru geldiğinde otomatik sesli oku
+  // Yeni soru geldiğinde otomatik sesli oku (ipucu/açıklama kısmını oku)
   useEffect(() => {
-    if (voiceEnabled && oyunDurumu?.soru_bilgisi && oyunBasladi && !showWordReveal) {
+    if (voiceEnabled && oyunDurumu?.aciklama && oyunBasladi && !showWordReveal) {
       // Kısa bir gecikme ile oku (animasyonlar için)
       const timer = setTimeout(() => {
-        speakQuestion(oyunDurumu.soru_bilgisi);
+        speakQuestion(oyunDurumu.aciklama);
       }, 500);
       return () => clearTimeout(timer);
     }
@@ -1167,20 +1191,27 @@ const GameScreen = ({ navigation }) => {
                   <View style={[componentStyles.game.infoCard, isMobile && { flex: 1 }]}><Text style={componentStyles.game.infoCardLabel}>KAZANÇ</Text><Text style={componentStyles.game.infoCardValue}>+{Math.max(0, mevcutKazanç)}</Text></View>
                 </View>
                 <Text style={componentStyles.game.questionInfo}>{oyunDurumu.soru_bilgisi}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
                   <TouchableOpacity 
                     style={[componentStyles.game.voiceButton, isSpeaking && { backgroundColor: colors.primary }]}
-                    onPress={() => isSpeaking ? stopSpeaking() : speakQuestion(oyunDurumu.soru_bilgisi)}
+                    onPress={() => isSpeaking ? stopSpeaking() : speakQuestion(oyunDurumu.aciklama)}
                   >
                     <Text style={{ fontSize: 24 }}>{isSpeaking ? '🔊' : '🔈'}</Text>
-                    <Text style={{ color: colors.textMuted, fontSize: 10, marginTop: 2 }}>{isSpeaking ? 'Durdur' : 'Sesli Oku'}</Text>
+                    <Text style={{ color: colors.textMuted, fontSize: 10, marginTop: 2 }}>{isSpeaking ? 'Durdur' : 'İpucu Oku'}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity 
-                    style={[componentStyles.game.voiceButton, { paddingHorizontal: 15 }]}
+                    style={[componentStyles.game.voiceButton, { paddingHorizontal: 12 }]}
                     onPress={() => setVoiceEnabled(!voiceEnabled)}
                   >
                     <Text style={{ fontSize: 20 }}>{voiceEnabled ? '🔔' : '🔕'}</Text>
-                    <Text style={{ color: colors.textMuted, fontSize: 10, marginTop: 2 }}>{voiceEnabled ? 'Otomatik Açık' : 'Otomatik Kapalı'}</Text>
+                    <Text style={{ color: colors.textMuted, fontSize: 10, marginTop: 2 }}>{voiceEnabled ? 'Oto Açık' : 'Oto Kapalı'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[componentStyles.game.voiceButton, { paddingHorizontal: 12 }, voiceInputEnabled && { borderColor: colors.success, borderWidth: 2 }]}
+                    onPress={() => setVoiceInputEnabled(!voiceInputEnabled)}
+                  >
+                    <Text style={{ fontSize: 20 }}>{voiceInputEnabled ? '🎤' : '⌨️'}</Text>
+                    <Text style={{ color: colors.textMuted, fontSize: 10, marginTop: 2 }}>{voiceInputEnabled ? 'Sesli Giriş' : 'Klavye'}</Text>
                   </TouchableOpacity>
                 </View>
                 <TouchableOpacity 

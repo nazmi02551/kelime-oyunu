@@ -18,7 +18,7 @@ import { AuthContext } from '../context/AuthContext';
 import api from '../services/api';
 import { globalStyles } from '../styles/globalStyles';
 import { colors } from '../utils/colors';
-import { achievementManager } from '../services/AchievementManager';
+import achievementManager from '../services/AchievementManager';
 
 const GradientView = ({ colors: gradientColors, style, children }) => {
   if (Platform.OS === 'web') {

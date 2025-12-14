@@ -23,13 +23,20 @@ class GameInvite:
     
     def _are_friends(self, user1_id, user2_id):
         """İki kullanıcının arkadaş olup olmadığını kontrol eder."""
-        friendship = self.friendships.find_one({
-            '$or': [
-                {'from_user': ObjectId(user1_id), 'to_user': ObjectId(user2_id), 'status': 'accepted'},
-                {'from_user': ObjectId(user2_id), 'to_user': ObjectId(user1_id), 'status': 'accepted'}
-            ]
-        })
-        return friendship is not None
+        try:
+            friendship = self.friendships.find_one({
+                '$or': [
+                    {'from_user': ObjectId(user1_id), 'to_user': ObjectId(user2_id), 'status': 'accepted'},
+                    {'from_user': ObjectId(user2_id), 'to_user': ObjectId(user1_id), 'status': 'accepted'}
+                ]
+            })
+            print(f"🔍 Arkadaşlık kontrolü: {user1_id} <-> {user2_id} = {friendship is not None}")
+            if friendship:
+                print(f"   Bulunan arkadaşlık: {friendship}")
+            return friendship is not None
+        except Exception as e:
+            print(f"❌ Arkadaşlık kontrolü hatası: {e}")
+            return False
     
     def send_invite(self, from_user_id, to_user_id, game_settings=None):
         """
