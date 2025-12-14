@@ -1,5 +1,5 @@
 // ChatScreen.js - Bireysel sohbet ekranı
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import {
   View,
   Text,
@@ -196,6 +196,37 @@ const ChatScreen = () => {
     }
   };
 
+  const deleteMessage = useCallback(async (messageId) => {
+    try {
+      const response = await api.delete(`/api/messages/delete/${messageId}`);
+      if (response.data.success) {
+        setMessages(prev => prev.filter(m => m._id !== messageId));
+      } else {
+        Alert.alert('Hata', response.data.error || 'Mesaj silinemedi');
+      }
+    } catch (error) {
+      console.error('Mesaj silinirken hata:', error);
+      Alert.alert('Hata', 'Mesaj silinemedi');
+    }
+  }, []);
+
+  const handleLongPress = useCallback((item) => {
+    if (!item.is_mine || item.pending) return;
+    
+    Alert.alert(
+      'Mesaj İşlemleri',
+      'Bu mesajı silmek istiyor musunuz?',
+      [
+        { text: 'İptal', style: 'cancel' },
+        { 
+          text: 'Sil', 
+          style: 'destructive',
+          onPress: () => deleteMessage(item._id)
+        }
+      ]
+    );
+  }, [deleteMessage]);
+
   const renderMessage = ({ item, index }) => {
     const isMe = item.is_mine;
     const showDate = index === messages.length - 1 || 
@@ -210,38 +241,44 @@ const ChatScreen = () => {
             </Text>
           </View>
         )}
-        <View style={[
-          styles.messageBubble,
-          isMe ? styles.myMessage : styles.theirMessage,
-          isMe 
-            ? { backgroundColor: theme.colors.primary }
-            : { backgroundColor: theme.colors.card }
-        ]}>
-          <Text style={[
-            styles.messageText,
-            { color: isMe ? '#fff' : theme.colors.text }
+        <TouchableOpacity
+          onLongPress={() => handleLongPress(item)}
+          delayLongPress={500}
+          activeOpacity={0.8}
+        >
+          <View style={[
+            styles.messageBubble,
+            isMe ? styles.myMessage : styles.theirMessage,
+            isMe 
+              ? { backgroundColor: theme.colors.primary }
+              : { backgroundColor: theme.colors.card }
           ]}>
-            {item.content}
-          </Text>
-          <View style={styles.messageFooter}>
             <Text style={[
-              styles.messageTime,
-              { color: isMe ? 'rgba(255,255,255,0.7)' : theme.colors.textSecondary }
+              styles.messageText,
+              { color: isMe ? '#fff' : theme.colors.text }
             ]}>
-              {formatTime(item.created_at)}
+              {item.content}
             </Text>
-            {item.pending && (
-              <Text style={[styles.pendingIndicator, { color: 'rgba(255,255,255,0.7)' }]}>
-                ⏳
+            <View style={styles.messageFooter}>
+              <Text style={[
+                styles.messageTime,
+                { color: isMe ? 'rgba(255,255,255,0.7)' : theme.colors.textSecondary }
+              ]}>
+                {formatTime(item.created_at)}
               </Text>
-            )}
-            {isMe && item.read && !item.pending && (
-              <Text style={[styles.readIndicator, { color: 'rgba(255,255,255,0.7)' }]}>
-                ✓✓
-              </Text>
-            )}
+              {item.pending && (
+                <Text style={[styles.pendingIndicator, { color: 'rgba(255,255,255,0.7)' }]}>
+                  ⏳
+                </Text>
+              )}
+              {isMe && item.read && !item.pending && (
+                <Text style={[styles.readIndicator, { color: 'rgba(255,255,255,0.7)' }]}>
+                  ✓✓
+                </Text>
+              )}
+            </View>
           </View>
-        </View>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -289,6 +326,12 @@ const ChatScreen = () => {
           contentContainerStyle={styles.messagesList}
           onEndReached={loadMore}
           onEndReachedThreshold={0.3}
+          // Performance optimizations
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={15}
+          windowSize={10}
+          initialNumToRender={20}
+          getItemLayout={undefined}
           ListEmptyComponent={() => (
             <View style={styles.emptyContainer}>
               <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>

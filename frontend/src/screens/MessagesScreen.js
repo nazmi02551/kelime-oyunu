@@ -1,5 +1,5 @@
 // MessagesScreen.js - Tüm konuşmaları listeler
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import {
   View,
   Text,
@@ -177,6 +177,11 @@ const MessagesScreen = () => {
         keyExtractor={(item, index) => item.conversation_id || `conv_${index}`}
         contentContainerStyle={conversations.length === 0 ? styles.emptyList : styles.list}
         ListEmptyComponent={renderEmptyComponent}
+        // Performance optimizations
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        initialNumToRender={15}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

@@ -46,6 +46,29 @@ const FriendsScreen = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [processingId, setProcessingId] = useState(null);
+  const [selectedProfile, setSelectedProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+
+  const viewProfile = async (username) => {
+    setProfileLoading(true);
+    setShowProfileModal(true);
+    try {
+      const response = await api.get(`/api/friends/profile/${username}`);
+      if (response.data.success) {
+        setSelectedProfile(response.data.profile);
+      } else {
+        Alert.alert('Hata', response.data.error || 'Profil yüklenemedi');
+        setShowProfileModal(false);
+      }
+    } catch (error) {
+      console.error('Profil yüklenemedi:', error);
+      Alert.alert('Hata', 'Profil yüklenemedi');
+      setShowProfileModal(false);
+    } finally {
+      setProfileLoading(false);
+    }
+  };
 
   const loadFriends = useCallback(async () => {
     try {
@@ -176,8 +199,29 @@ const FriendsScreen = ({ navigation }) => {
     );
   };
 
+  const sendGameInvite = async (friend) => {
+    try {
+      setProcessingId(friend.username);
+      const response = await api.post('/api/game-invites/send', {
+        to_username: friend.username,
+        game_settings: { question_count: 10 }
+      });
+      
+      if (response.data.success) {
+        Alert.alert('Başarılı', response.data.message || 'Oyun daveti gönderildi!');
+      } else {
+        Alert.alert('Hata', response.data.error || 'Davet gönderilemedi');
+      }
+    } catch (error) {
+      console.error('Davet gönderme hatası:', error);
+      Alert.alert('Hata', 'Davet gönderilemedi');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   const FriendCard = ({ friend }) => (
-    <View style={styles.friendCard}>
+    <TouchableOpacity style={styles.friendCard} onPress={() => viewProfile(friend.username)}>
       <View style={styles.avatarContainer}>
         <Text style={styles.avatarText}>
           {(friend.username || 'U').charAt(0).toUpperCase()}
@@ -191,18 +235,29 @@ const FriendsScreen = ({ navigation }) => {
       </View>
       <View style={styles.friendActions}>
         <TouchableOpacity 
+          style={styles.inviteButton}
+          onPress={(e) => { e.stopPropagation(); sendGameInvite(friend); }}
+          disabled={processingId === friend.username}
+        >
+          {processingId === friend.username ? (
+            <ActivityIndicator size="small" color={colors.primary} />
+          ) : (
+            <Text style={styles.inviteButtonText}>🎮</Text>
+          )}
+        </TouchableOpacity>
+        <TouchableOpacity 
           style={styles.messageButton}
-          onPress={() => navigation.navigate('Chat', { 
+          onPress={(e) => { e.stopPropagation(); navigation.navigate('Chat', { 
             friendUsername: friend.username,
             friendId: friend.user_id || friend._id,
             conversationId: null
-          })}
+          }); }}
         >
           <Text style={styles.messageButtonText}>💬</Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={styles.removeButton}
-          onPress={() => removeFriend(friend.username)}
+          onPress={(e) => { e.stopPropagation(); removeFriend(friend.username); }}
           disabled={processingId === friend.username}
         >
           {processingId === friend.username ? (
@@ -212,7 +267,7 @@ const FriendsScreen = ({ navigation }) => {
           )}
         </TouchableOpacity>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   const RequestCard = ({ request }) => (
@@ -421,6 +476,117 @@ const FriendsScreen = ({ navigation }) => {
         {renderContent()}
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Profil Modal */}
+      <Modal
+        visible={showProfileModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowProfileModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.profileModal}>
+            <TouchableOpacity 
+              style={styles.closeModalButton}
+              onPress={() => setShowProfileModal(false)}
+            >
+              <Text style={styles.closeModalText}>✕</Text>
+            </TouchableOpacity>
+            
+            {profileLoading ? (
+              <View style={styles.profileLoading}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={styles.loadingText}>Profil yükleniyor...</Text>
+              </View>
+            ) : selectedProfile ? (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={styles.profileHeader}>
+                  <View style={styles.profileAvatar}>
+                    <Text style={styles.profileAvatarText}>
+                      {(selectedProfile.username || 'U').charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                  <Text style={styles.profileUsername}>{selectedProfile.username}</Text>
+                  {selectedProfile.created_at && (
+                    <Text style={styles.profileJoined}>
+                      Katılım: {new Date(selectedProfile.created_at).toLocaleDateString('tr-TR')}
+                    </Text>
+                  )}
+                </View>
+
+                {selectedProfile.statistics && (
+                  <View style={styles.profileStats}>
+                    <Text style={styles.profileSectionTitle}>📊 İstatistikler</Text>
+                    <View style={styles.statsGrid}>
+                      <View style={styles.statBox}>
+                        <Text style={styles.statValue}>{selectedProfile.statistics.total_score}</Text>
+                        <Text style={styles.statLabel}>Toplam Puan</Text>
+                      </View>
+                      <View style={styles.statBox}>
+                        <Text style={styles.statValue}>{selectedProfile.statistics.games_played}</Text>
+                        <Text style={styles.statLabel}>Oyun</Text>
+                      </View>
+                      <View style={styles.statBox}>
+                        <Text style={styles.statValue}>{selectedProfile.statistics.success_rate}%</Text>
+                        <Text style={styles.statLabel}>Başarı</Text>
+                      </View>
+                      <View style={styles.statBox}>
+                        <Text style={styles.statValue}>{selectedProfile.statistics.longest_streak}</Text>
+                        <Text style={styles.statLabel}>En Uzun Seri</Text>
+                      </View>
+                    </View>
+                  </View>
+                )}
+
+                {selectedProfile.achievements && selectedProfile.achievements.length > 0 && (
+                  <View style={styles.profileAchievements}>
+                    <Text style={styles.profileSectionTitle}>
+                      🏅 Başarımlar ({selectedProfile.achievements_count})
+                    </Text>
+                    {selectedProfile.achievements.map((ach, index) => (
+                      <View key={ach.id || index} style={styles.achievementItem}>
+                        <Text style={styles.achievementName}>{ach.name}</Text>
+                        {ach.unlocked_at && (
+                          <Text style={styles.achievementDate}>
+                            {new Date(ach.unlocked_at).toLocaleDateString('tr-TR')}
+                          </Text>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {!selectedProfile.is_self && selectedProfile.is_friend && (
+                  <View style={styles.profileActions}>
+                    <TouchableOpacity 
+                      style={styles.profileActionButton}
+                      onPress={() => {
+                        setShowProfileModal(false);
+                        navigation.navigate('Chat', {
+                          friendUsername: selectedProfile.username,
+                          friendId: selectedProfile.user_id,
+                          conversationId: null
+                        });
+                      }}
+                    >
+                      <Text style={styles.profileActionText}>💬 Mesaj Gönder</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={[styles.profileActionButton, styles.inviteActionButton]}
+                      onPress={() => {
+                        setShowProfileModal(false);
+                        sendGameInvite({ username: selectedProfile.username });
+                      }}
+                    >
+                      <Text style={styles.profileActionText}>🎮 Oyuna Davet Et</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </ScrollView>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -542,6 +708,17 @@ const styles = {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  inviteButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.success + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inviteButtonText: {
+    fontSize: 18,
   },
   messageButton: {
     width: 36,
@@ -709,6 +886,141 @@ const styles = {
     color: colors.textMuted,
     fontSize: 14,
     textAlign: 'center',
+  },
+  // Profile Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  profileModal: {
+    backgroundColor: colors.card,
+    borderRadius: 20,
+    padding: 20,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '80%',
+  },
+  closeModalButton: {
+    position: 'absolute',
+    top: 15,
+    right: 15,
+    zIndex: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeModalText: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  profileLoading: {
+    alignItems: 'center',
+    padding: 50,
+  },
+  profileHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  profileAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 15,
+  },
+  profileAvatarText: {
+    color: '#fff',
+    fontSize: 36,
+    fontWeight: 'bold',
+  },
+  profileUsername: {
+    color: colors.textPrimary,
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  profileJoined: {
+    color: colors.textMuted,
+    fontSize: 12,
+    marginTop: 5,
+  },
+  profileStats: {
+    marginBottom: 20,
+  },
+  profileSectionTitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  statBox: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: colors.background,
+    borderRadius: 10,
+    padding: 15,
+    alignItems: 'center',
+  },
+  statValue: {
+    color: colors.primary,
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  statLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+    marginTop: 5,
+  },
+  profileAchievements: {
+    marginBottom: 20,
+  },
+  achievementItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+  },
+  achievementName: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    flex: 1,
+  },
+  achievementDate: {
+    color: colors.textMuted,
+    fontSize: 11,
+  },
+  profileActions: {
+    gap: 10,
+  },
+  profileActionButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    padding: 15,
+    alignItems: 'center',
+  },
+  inviteActionButton: {
+    backgroundColor: colors.success,
+  },
+  profileActionText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 };
 

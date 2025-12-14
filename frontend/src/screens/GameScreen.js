@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useContext, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useContext, useCallback, useMemo, memo } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -49,8 +49,8 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// GameStatsWidget
-const GameStatsWidget = ({ user, oyunDurumu }) => {
+// GameStatsWidget - Memoized for performance
+const GameStatsWidget = memo(({ user, oyunDurumu }) => {
   if (!user) return null;
 
   return (
@@ -73,9 +73,9 @@ const GameStatsWidget = ({ user, oyunDurumu }) => {
       </View>
     </View>
   );
-};
+});
 
-const DifficultyIndicator = ({ user }) => {
+const DifficultyIndicator = memo(({ user }) => {
   const adaptive = user?.adaptive_difficulty || {};
   const currentModifier = adaptive.current_modifier || 1.0;
   const performanceScore = adaptive.performance_score || 0.5;
@@ -101,7 +101,7 @@ const DifficultyIndicator = ({ user }) => {
       <Text style={componentStyles.game.difficultyModifier}>Çarpan: {currentModifier.toFixed(2)}x</Text>
     </View>
   );
-};
+});
 
 const GameScreen = ({ navigation }) => {
   const { user, logout, signOut, refreshUserData, updateUserStats } = useContext(AuthContext);
@@ -140,6 +140,7 @@ const GameScreen = ({ navigation }) => {
   const [recentAchievements, setRecentAchievements] = useState([]);
   const [showAchievementNotification, setShowAchievementNotification] = useState(false);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+  const [pendingInvites, setPendingInvites] = useState([]);
 
   // --- Sidebar API state ---
   const [kelimeIstatistikleri, setKelimeIstatistikleri] = useState(null);
@@ -168,12 +169,58 @@ const GameScreen = ({ navigation }) => {
     }
   }, []);
 
+  // Bekleyen oyun davetlerini getir
+  const fetchPendingInvites = useCallback(async () => {
+    try {
+      const response = await api.get('/api/game-invites/pending');
+      if (response.data.success) {
+        const invites = response.data.invites || [];
+        setPendingInvites(invites);
+        
+        // Yeni davet varsa bildirim göster
+        if (invites.length > 0 && !oyunBasladi) {
+          const latestInvite = invites[0];
+          Alert.alert(
+            '🎮 Oyun Daveti',
+            `${latestInvite.from_username} sizi ${latestInvite.game_settings?.question_count || 10} soruluk bir oyuna davet etti!`,
+            [
+              { text: 'Reddet', style: 'cancel', onPress: () => respondToInvite(latestInvite.invite_id, false) },
+              { text: 'Kabul Et', onPress: () => respondToInvite(latestInvite.invite_id, true) }
+            ]
+          );
+        }
+      }
+    } catch (error) {
+      // Sessizce geç
+    }
+  }, [oyunBasladi]);
+
+  const respondToInvite = async (inviteId, accept) => {
+    try {
+      const response = await api.post(`/api/game-invites/respond/${inviteId}`, { accept });
+      if (response.data.success) {
+        setPendingInvites(prev => prev.filter(inv => inv.invite_id !== inviteId));
+        if (accept) {
+          // Kabul edildi, oyunu başlat
+          setGameMessage({ type: 'success', text: 'Davet kabul edildi! Oyun başlatılıyor...' });
+          oyunBaslat(response.data.game_settings);
+        }
+      }
+    } catch (error) {
+      console.error('Davet yanıt hatası:', error);
+    }
+  };
+
   useEffect(() => {
     fetchUnreadCount();
+    fetchPendingInvites();
     // Her 30 saniyede bir kontrol et
-    const interval = setInterval(fetchUnreadCount, 30000);
+    const interval = setInterval(() => {
+      fetchUnreadCount();
+      fetchPendingInvites();
+    }, 30000);
     return () => clearInterval(interval);
-  }, [fetchUnreadCount]);
+  }, [fetchUnreadCount, fetchPendingInvites]);
 
   // Sidebar verilerini fetch et
   useEffect(() => {

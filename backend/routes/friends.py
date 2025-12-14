@@ -202,3 +202,65 @@ def block_user(current_user_id):
     except Exception as e:
         print(f"❌ Kullanıcı engellenirken hata: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@friends_bp.route('/profile/<username>', methods=['GET'])
+@token_required
+def get_friend_profile(current_user_id, username):
+    """Arkadaşın profilini getirir."""
+    try:
+        from bson import ObjectId
+        db = current_app.db
+        
+        # Kullanıcıyı bul
+        user = db.users.find_one({'username': username}, {'password': 0})
+        if not user:
+            return jsonify({'success': False, 'error': 'Kullanıcı bulunamadı'}), 404
+        
+        target_user_id = str(user['_id'])
+        
+        # Arkadaşlık durumunu kontrol et
+        friendship_model = Friendship(db)
+        is_friend = friendship_model._check_friendship_exists(current_user_id, target_user_id)
+        
+        # Temel bilgiler herkese açık
+        profile = {
+            'user_id': target_user_id,
+            'username': user.get('username'),
+            'created_at': user.get('created_at').isoformat() if user.get('created_at') else None,
+            'is_friend': is_friend,
+            'is_self': current_user_id == target_user_id
+        }
+        
+        # İstatistikler (arkadaşlara açık)
+        if is_friend or current_user_id == target_user_id:
+            stats = user.get('statistics', {})
+            profile['statistics'] = {
+                'total_score': stats.get('total_score', 0),
+                'games_played': stats.get('games_played', 0),
+                'total_correct_answers': stats.get('total_correct_answers', 0),
+                'total_wrong_answers': stats.get('total_wrong_answers', 0),
+                'success_rate': stats.get('success_rate', 0),
+                'current_streak': stats.get('current_streak', 0),
+                'longest_streak': stats.get('longest_streak', 0),
+                'average_score': stats.get('average_score', 0)
+            }
+            
+            # Başarımlar
+            achievements = user.get('achievements', [])
+            profile['achievements'] = [{
+                'id': ach.get('id'),
+                'name': ach.get('name'),
+                'unlocked_at': ach.get('unlocked_at').isoformat() if ach.get('unlocked_at') else None
+            } for ach in achievements[:10]]  # Son 10 başarım
+            
+            profile['achievements_count'] = len(achievements)
+        
+        return jsonify({
+            'success': True,
+            'profile': profile
+        })
+        
+    except Exception as e:
+        print(f"❌ Profil alınırken hata: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500

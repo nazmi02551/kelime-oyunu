@@ -14,6 +14,7 @@ from routes.leaderboard import leaderboard_bp
 from routes.daily_tasks import daily_tasks_bp
 from routes.friends import friends_bp
 from routes.messages import messages_bp
+from routes.game_invites import game_invites_bp
 from config import Config
 from init_db_schema import init_db_schema
 from models.active_game import ActiveGame
@@ -91,6 +92,7 @@ def create_app():
     app.register_blueprint(daily_tasks_bp, url_prefix='/api/daily-tasks')
     app.register_blueprint(friends_bp, url_prefix='/api/friends')
     app.register_blueprint(messages_bp, url_prefix='/api/messages')
+    app.register_blueprint(game_invites_bp, url_prefix='/api/game-invites')
 
     # Eski/boş recent-games endpoint'leri (frontend kırılmasın diye)
     @app.route('/game/recent-games', methods=['GET'])
