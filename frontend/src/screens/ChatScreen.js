@@ -198,15 +198,17 @@ const ChatScreen = () => {
 
   const deleteMessage = useCallback(async (messageId) => {
     try {
+      console.log('Mesaj siliniyor, ID:', messageId);
       const response = await api.delete(`/api/messages/delete/${messageId}`);
+      console.log('Silme yanıtı:', response.data);
       if (response.data.success) {
-        setMessages(prev => prev.filter(m => m._id !== messageId));
+        setMessages(prev => prev.filter(m => m._id !== messageId && m.message_id !== messageId));
       } else {
         Alert.alert('Hata', response.data.error || 'Mesaj silinemedi');
       }
     } catch (error) {
-      console.error('Mesaj silinirken hata:', error);
-      Alert.alert('Hata', 'Mesaj silinemedi');
+      console.error('Mesaj silinirken hata:', error.response?.data || error.message);
+      Alert.alert('Hata', error.response?.data?.error || 'Mesaj silinemedi');
     }
   }, []);
 

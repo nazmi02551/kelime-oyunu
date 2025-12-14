@@ -200,9 +200,12 @@ const FriendsScreen = ({ navigation }) => {
               if (response.data.success) {
                 Alert.alert('Başarılı', 'Arkadaş silindi');
                 loadFriends();
+              } else {
+                Alert.alert('Hata', response.data.error || 'Silme işlemi başarısız');
               }
             } catch (error) {
-              Alert.alert('Hata', 'Silme işlemi başarısız');
+              console.error('Arkadaş silme hatası:', error);
+              Alert.alert('Hata', error.response?.data?.error || 'Silme işlemi başarısız');
             } finally {
               setProcessingId(null);
             }
@@ -215,10 +218,13 @@ const FriendsScreen = ({ navigation }) => {
   const sendGameInvite = async (friend) => {
     try {
       setProcessingId(friend.username);
+      console.log('Oyun daveti gönderiliyor:', friend.username);
       const response = await api.post('/api/game-invites/send', {
         to_username: friend.username,
         game_settings: { question_count: 10 }
       });
+      
+      console.log('Davet yanıtı:', response.data);
       
       if (response.data.success) {
         Alert.alert('Başarılı', response.data.message || 'Oyun daveti gönderildi!');
@@ -226,8 +232,8 @@ const FriendsScreen = ({ navigation }) => {
         Alert.alert('Hata', response.data.error || 'Davet gönderilemedi');
       }
     } catch (error) {
-      console.error('Davet gönderme hatası:', error);
-      Alert.alert('Hata', 'Davet gönderilemedi');
+      console.error('Davet gönderme hatası:', error.response?.data || error.message);
+      Alert.alert('Hata', error.response?.data?.error || 'Davet gönderilemedi');
     } finally {
       setProcessingId(null);
     }
@@ -680,7 +686,8 @@ const FriendsScreen = ({ navigation }) => {
                       🏅 Başarımlar ({selectedProfile.achievements_count})
                     </Text>
                     {selectedProfile.achievements.map((ach, index) => {
-                      const achDef = achievementManager.getDefinitions()[ach.id];
+                      const definitions = achievementManager?.getDefinitions?.() || {};
+                      const achDef = definitions[ach.id];
                       return (
                         <View key={ach.id || index} style={styles.achievementItem}>
                           <Text style={styles.achievementIcon}>{achDef?.icon || '🏅'}</Text>
