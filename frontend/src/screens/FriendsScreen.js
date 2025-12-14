@@ -39,9 +39,10 @@ const FriendsScreen = ({ navigation }) => {
   const { user } = useContext(AuthContext);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState('friends'); // friends, requests, search
+  const [activeTab, setActiveTab] = useState('friends'); // friends, requests, search, invites
   const [friends, setFriends] = useState([]);
   const [requests, setRequests] = useState([]);
+  const [gameInvites, setGameInvites] = useState([]);
   const [searchResults, setSearchResults] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
@@ -93,12 +94,23 @@ const FriendsScreen = ({ navigation }) => {
     }
   }, []);
 
+  const loadGameInvites = useCallback(async () => {
+    try {
+      const response = await api.get('/api/game-invites/pending');
+      if (response.data.success) {
+        setGameInvites(response.data.invites || []);
+      }
+    } catch (error) {
+      console.error('Oyun davetleri yüklenemedi:', error);
+    }
+  }, []);
+
   const loadData = useCallback(async () => {
     setLoading(true);
-    await Promise.all([loadFriends(), loadRequests()]);
+    await Promise.all([loadFriends(), loadRequests(), loadGameInvites()]);
     setLoading(false);
     setRefreshing(false);
-  }, [loadFriends, loadRequests]);
+  }, [loadFriends, loadRequests, loadGameInvites]);
 
   useEffect(() => {
     loadData();
@@ -220,55 +232,101 @@ const FriendsScreen = ({ navigation }) => {
     }
   };
 
-  const FriendCard = ({ friend }) => (
-    <TouchableOpacity style={styles.friendCard} onPress={() => viewProfile(friend.username)}>
-      <View style={styles.avatarContainer}>
-        <Text style={styles.avatarText}>
-          {(friend.username || 'U').charAt(0).toUpperCase()}
-        </Text>
-      </View>
-      <View style={styles.friendInfo}>
-        <Text style={styles.friendName}>{friend.username}</Text>
-        <Text style={styles.friendStats}>
-          {friend.statistics?.total_score || friend.total_score || 0} puan • {friend.statistics?.games_played || friend.games_played || 0} oyun
-        </Text>
-      </View>
-      <View style={styles.friendActions}>
+  const respondToGameInvite = async (inviteId, accept) => {
+    try {
+      setProcessingId(inviteId);
+      const response = await api.post(`/api/game-invites/respond/${inviteId}`, { accept });
+      if (response.data.success) {
+        setGameInvites(prev => prev.filter(inv => inv.invite_id !== inviteId));
+        if (accept) {
+          Alert.alert('Başarılı', 'Davet kabul edildi! Oyun ekranından başlatabilirsiniz.');
+        } else {
+          Alert.alert('Bilgi', 'Davet reddedildi');
+        }
+      } else {
+        Alert.alert('Hata', response.data.error || 'İşlem başarısız');
+      }
+    } catch (error) {
+      console.error('Davet yanıt hatası:', error);
+      Alert.alert('Hata', 'İşlem başarısız');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const FriendCard = ({ friend }) => {
+    const handleInvite = () => {
+      sendGameInvite(friend);
+    };
+    
+    const handleMessage = () => {
+      navigation.navigate('Chat', { 
+        friendUsername: friend.username,
+        friendId: friend.user_id || friend._id,
+        conversationId: null
+      });
+    };
+    
+    const handleRemove = () => {
+      removeFriend(friend.username);
+    };
+    
+    const handleProfile = () => {
+      viewProfile(friend.username);
+    };
+    
+    return (
+      <View style={styles.friendCard}>
         <TouchableOpacity 
-          style={styles.inviteButton}
-          onPress={(e) => { e.stopPropagation(); sendGameInvite(friend); }}
-          disabled={processingId === friend.username}
+          style={styles.friendMainArea} 
+          onPress={handleProfile}
+          activeOpacity={0.7}
         >
-          {processingId === friend.username ? (
-            <ActivityIndicator size="small" color={colors.primary} />
-          ) : (
-            <Text style={styles.inviteButtonText}>🎮</Text>
-          )}
+          <View style={styles.avatarContainer}>
+            <Text style={styles.avatarText}>
+              {(friend.username || 'U').charAt(0).toUpperCase()}
+            </Text>
+          </View>
+          <View style={styles.friendInfo}>
+            <Text style={styles.friendName}>{friend.username}</Text>
+            <Text style={styles.friendStats}>
+              {friend.statistics?.total_score || friend.total_score || 0} puan • {friend.statistics?.games_played || friend.games_played || 0} oyun
+            </Text>
+          </View>
         </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.messageButton}
-          onPress={(e) => { e.stopPropagation(); navigation.navigate('Chat', { 
-            friendUsername: friend.username,
-            friendId: friend.user_id || friend._id,
-            conversationId: null
-          }); }}
-        >
-          <Text style={styles.messageButtonText}>💬</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.removeButton}
-          onPress={(e) => { e.stopPropagation(); removeFriend(friend.username); }}
-          disabled={processingId === friend.username}
-        >
-          {processingId === friend.username ? (
-            <ActivityIndicator size="small" color={colors.danger} />
-          ) : (
-            <Text style={styles.removeButtonText}>✕</Text>
-          )}
-        </TouchableOpacity>
+        <View style={styles.friendActions}>
+          <TouchableOpacity 
+            style={styles.inviteButton}
+            onPress={handleInvite}
+            disabled={processingId === friend.username}
+          >
+            {processingId === friend.username ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <Text style={styles.inviteButtonText}>🎮</Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.messageButton}
+            onPress={handleMessage}
+          >
+            <Text style={styles.messageButtonText}>💬</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.removeButton}
+            onPress={handleRemove}
+            disabled={processingId === friend.username}
+          >
+            {processingId === friend.username ? (
+              <ActivityIndicator size="small" color={colors.danger} />
+            ) : (
+              <Text style={styles.removeButtonText}>✕</Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
-    </TouchableOpacity>
-  );
+    );
+  };
 
   const RequestCard = ({ request }) => (
     <View style={styles.requestCard}>
@@ -343,6 +401,45 @@ const FriendsScreen = ({ navigation }) => {
     </View>
   );
 
+  const GameInviteCard = ({ invite }) => (
+    <View style={styles.inviteCard}>
+      <View style={styles.avatarContainer}>
+        <Text style={styles.avatarText}>
+          {(invite.from_username || 'U').charAt(0).toUpperCase()}
+        </Text>
+      </View>
+      <View style={styles.inviteInfo}>
+        <Text style={styles.inviteName}>{invite.from_username}</Text>
+        <Text style={styles.inviteDetails}>
+          🎮 {invite.game_settings?.question_count || 10} soruluk oyun daveti
+        </Text>
+        <Text style={styles.inviteTime}>
+          {invite.created_at ? new Date(invite.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : ''}
+        </Text>
+      </View>
+      <View style={styles.inviteActions}>
+        <TouchableOpacity 
+          style={[styles.actionButton, styles.acceptButton]}
+          onPress={() => respondToGameInvite(invite.invite_id, true)}
+          disabled={processingId === invite.invite_id}
+        >
+          {processingId === invite.invite_id ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.actionButtonText}>✓</Text>
+          )}
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.actionButton, styles.rejectButton]}
+          onPress={() => respondToGameInvite(invite.invite_id, false)}
+          disabled={processingId === invite.invite_id}
+        >
+          <Text style={styles.actionButtonText}>✕</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   const renderContent = () => {
     if (loading) {
       return (
@@ -380,6 +477,24 @@ const FriendsScreen = ({ navigation }) => {
             <Text style={styles.emptyStateTitle}>Arkadaşlık isteği yok</Text>
             <Text style={styles.emptyStateText}>
               Yeni istekler burada görünecek
+            </Text>
+          </View>
+        );
+
+      case 'invites':
+        return gameInvites.length > 0 ? (
+          <View>
+            <Text style={styles.sectionTitle}>🎮 Oyun Davetleri ({gameInvites.length})</Text>
+            {gameInvites.map((invite, index) => (
+              <GameInviteCard key={invite.invite_id || index} invite={invite} />
+            ))}
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateIcon}>🎮</Text>
+            <Text style={styles.emptyStateTitle}>Oyun daveti yok</Text>
+            <Text style={styles.emptyStateText}>
+              Arkadaşlarınızdan gelen davetler burada görünecek
             </Text>
           </View>
         );
@@ -455,6 +570,14 @@ const FriendsScreen = ({ navigation }) => {
         >
           <Text style={[styles.tabText, activeTab === 'requests' && styles.activeTabText]}>
             İstekler {requests.length > 0 && `(${requests.length})`}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.tab, activeTab === 'invites' && styles.activeTab]}
+          onPress={() => setActiveTab('invites')}
+        >
+          <Text style={[styles.tabText, activeTab === 'invites' && styles.activeTabText]}>
+            🎮 {gameInvites.length > 0 && `(${gameInvites.length})`}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity 
@@ -677,6 +800,11 @@ const styles = {
     shadowRadius: 8,
     elevation: 3,
   },
+  friendMainArea: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
   avatarContainer: {
     width: 50,
     height: 50,
@@ -766,6 +894,38 @@ const styles = {
     marginTop: 2,
   },
   requestActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  inviteCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 15,
+    padding: 15,
+    marginBottom: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#9b59b6',
+  },
+  inviteInfo: {
+    flex: 1,
+  },
+  inviteName: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  inviteDetails: {
+    color: '#9b59b6',
+    fontSize: 13,
+    marginTop: 2,
+  },
+  inviteTime: {
+    color: colors.textMuted,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  inviteActions: {
     flexDirection: 'row',
     gap: 8,
   },

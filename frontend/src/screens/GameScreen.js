@@ -937,7 +937,14 @@ const GameScreen = ({ navigation }) => {
                 <View style={[componentStyles.game.bottomMenu, { flexDirection: 'column', gap: 10, width: '100%' }]}>
                   <View style={[componentStyles.game.buttonRow, { flexDirection: 'row', gap: 10, width: '100%' }]}>
                     <TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50 }]} onPress={() => navigation.navigate('DailyTasks')}><Text style={componentStyles.game.menuButtonText}>📋 Görevler</Text></TouchableOpacity>
-                    <TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50 }]} onPress={() => navigation.navigate('Friends')}><Text style={componentStyles.game.menuButtonText}>👥 Arkadaşlar</Text></TouchableOpacity>
+                    <TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50, position: 'relative' }]} onPress={() => navigation.navigate('Friends')}>
+                      <Text style={componentStyles.game.menuButtonText}>👥 Arkadaşlar</Text>
+                      {pendingInvites.length > 0 && (
+                        <View style={{ position: 'absolute', top: -5, right: -5, backgroundColor: '#9b59b6', borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 5 }}>
+                          <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>{pendingInvites.length}</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
                   </View>
                   <View style={[componentStyles.game.buttonRow, { flexDirection: 'row', gap: 10, width: '100%' }]}>
                     <TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50, position: 'relative' }]} onPress={() => { navigation.navigate('Messages'); fetchUnreadCount(); }}>
