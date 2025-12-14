@@ -67,6 +67,8 @@ def temizle_ve_buyut(metin):
 def oyun_sonu_isle(current_user_id, oyun, neden="süre_doldu"):
     """
     GÜNCELLENMİŞ: Basitleştirilmiş ve güvenilir oyun sonu işlemleri
+    + Günlük görev ilerlemesi güncelleme
+    + Başarım kontrolü
     """
     final_puan = oyun.get('puan', 0)
     db = current_app.db
@@ -129,6 +131,35 @@ def oyun_sonu_isle(current_user_id, oyun, neden="süre_doldu"):
     except Exception as e:
         print(f"❌ Zorluk güncelleme hatası: {e}")
 
+    # Günlük görevleri güncelle
+    try:
+        from models.daily_task import DailyTask
+        daily_task_model = DailyTask(db)
+        daily_task_model.update_progress(current_user_id, 'games_played', 1)
+        daily_task_model.update_progress(current_user_id, 'correct_answers', correct)
+        daily_task_model.update_progress(current_user_id, 'score_earned', oyun_puan_delta)
+        daily_task_model.update_progress(current_user_id, 'best_streak', longest_streak, increment=False)
+        print(f"✅ Günlük görevler güncellendi: {current_user_id}")
+    except Exception as e:
+        print(f"⚠️ Günlük görev güncelleme hatası: {e}")
+
+    # Başarımları kontrol et
+    unlocked_achievements = []
+    try:
+        user = user_model.find_by_id(current_user_id)
+        game_data = {
+            'correct_answers': correct,
+            'total_questions': oyun.get('toplam_sorular', 0),
+            'final_score': final_puan
+        }
+        unlocked_achievements = check_achievements_for_user(user, game_data)
+        if unlocked_achievements:
+            achievement_ids = [a['id'] for a in unlocked_achievements]
+            user_model.add_achievements(current_user_id, achievement_ids, source='game')
+            print(f"✅ Yeni başarımlar: {achievement_ids}")
+    except Exception as e:
+        print(f"⚠️ Başarım kontrol hatası: {e}")
+
     try:
         active_game_model.delete_game(current_user_id)
         print(f"✅ Aktif oyun kaydı silindi: {current_user_id}")
@@ -141,10 +172,124 @@ def oyun_sonu_isle(current_user_id, oyun, neden="süre_doldu"):
         'puan': final_puan,
         'mesaj': f'Oyun bitti! Toplam puanınız: {final_puan}.',
         'correct_answers': correct,
-        'wrong_answers': wrong
+        'wrong_answers': wrong,
+        'unlocked_achievements': unlocked_achievements
     }
 
 # --- ROUTES ---
+# Başarım tanımları - Frontend ile senkronize
+ACHIEVEMENT_DEFINITIONS = {
+    'FIRST_GAME': {
+        'id': 'FIRST_GAME',
+        'name': 'İlk Oyun',
+        'description': 'İlk oyununu tamamla',
+        'icon': '🎮',
+        'condition': lambda user, game: user.get('statistics', {}).get('games_played', 0) >= 1
+    },
+    'STREAK_5': {
+        'id': 'STREAK_5',
+        'name': 'Ateşli Seri',
+        'description': '5 soru üst üste doğru cevapla',
+        'icon': '🔥',
+        'condition': lambda user, game: user.get('statistics', {}).get('longest_streak', 0) >= 5
+    },
+    'PERFECT_GAME': {
+        'id': 'PERFECT_GAME',
+        'name': 'Kusursuz Oyun',
+        'description': 'Bir oyunda tüm soruları doğru cevapla',
+        'icon': '⭐',
+        'condition': lambda user, game: game and game.get('correct_answers', 0) == game.get('total_questions', 0) and game.get('total_questions', 0) > 0
+    },
+    'SCORE_1000': {
+        'id': 'SCORE_1000',
+        'name': 'Puan Avcısı',
+        'description': '1000 puan topla',
+        'icon': '🏆',
+        'condition': lambda user, game: user.get('statistics', {}).get('total_score', 0) >= 1000
+    },
+    'SCORE_5000': {
+        'id': 'SCORE_5000',
+        'name': 'Puan Ustası',
+        'description': '5000 puan topla',
+        'icon': '💎',
+        'condition': lambda user, game: user.get('statistics', {}).get('total_score', 0) >= 5000
+    },
+    'SCORE_10000': {
+        'id': 'SCORE_10000',
+        'name': 'Puan Efsanesi',
+        'description': '10000 puan topla',
+        'icon': '👑',
+        'condition': lambda user, game: user.get('statistics', {}).get('total_score', 0) >= 10000
+    },
+    'CATEGORY_MASTER': {
+        'id': 'CATEGORY_MASTER',
+        'name': 'Kategori Ustası',
+        'description': 'Bir kategoride 10 doğru cevap ver',
+        'icon': '📚',
+        'condition': lambda user, game: user.get('statistics', {}).get('total_correct_answers', 0) >= 10
+    },
+    'WORD_EXPLORER': {
+        'id': 'WORD_EXPLORER',
+        'name': 'Kelime Kaşifi',
+        'description': '50 farklı kelime çöz',
+        'icon': '🔍',
+        'condition': lambda user, game: user.get('statistics', {}).get('total_correct_answers', 0) >= 50
+    },
+    'CONSISTENT_PLAYER': {
+        'id': 'CONSISTENT_PLAYER',
+        'name': 'Düzenli Oyuncu',
+        'description': '10 oyun tamamla',
+        'icon': '📅',
+        'condition': lambda user, game: user.get('statistics', {}).get('games_played', 0) >= 10
+    },
+    'VETERAN_PLAYER': {
+        'id': 'VETERAN_PLAYER',
+        'name': 'Deneyimli Oyuncu',
+        'description': '50 oyun tamamla',
+        'icon': '🎖️',
+        'condition': lambda user, game: user.get('statistics', {}).get('games_played', 0) >= 50
+    },
+    'STREAK_10': {
+        'id': 'STREAK_10',
+        'name': 'Seri Ustası',
+        'description': '10 doğru cevap serisi yap',
+        'icon': '⚡',
+        'condition': lambda user, game: user.get('statistics', {}).get('longest_streak', 0) >= 10
+    },
+    'HIGH_ACCURACY': {
+        'id': 'HIGH_ACCURACY',
+        'name': 'Keskin Nişancı',
+        'description': '%80 üzeri başarı oranı (en az 20 soru)',
+        'icon': '🎯',
+        'condition': lambda user, game: user.get('statistics', {}).get('success_rate', 0) >= 80 and user.get('statistics', {}).get('total_questions_answered', 0) >= 20
+    }
+}
+
+def check_achievements_for_user(user, game_data=None):
+    """
+    Kullanıcının kazanabileceği başarımları kontrol eder.
+    Sadece henüz kazanılmamış başarımları döndürür.
+    """
+    existing_ids = set(a.get('id') for a in user.get('achievements', []))
+    newly_unlocked = []
+    
+    for achievement_id, achievement in ACHIEVEMENT_DEFINITIONS.items():
+        if achievement_id in existing_ids:
+            continue
+        try:
+            if achievement['condition'](user, game_data):
+                newly_unlocked.append({
+                    'id': achievement['id'],
+                    'name': achievement['name'],
+                    'description': achievement['description'],
+                    'icon': achievement['icon']
+                })
+        except Exception as e:
+            print(f"⚠️ Achievement condition check error ({achievement_id}): {e}")
+            continue
+    
+    return newly_unlocked
+
 @game_bp.route('/check-achievements', methods=['POST'])
 @token_required
 def check_achievements(current_user_id):
@@ -161,45 +306,65 @@ def check_achievements(current_user_id):
         user = user_model.find_by_id(current_user_id)
         if not user:
             return jsonify({"error": "Kullanıcı bulunamadı"}), 404
-            
-        # Basit achievement kontrolü - frontend ile uyumlu
-        unlocked_achievements = []
         
-        # Örnek achievement kuralları
-        correct_answers = data.get('correct_answers', 0)
-        total_questions = data.get('total_questions', 0)
-        final_score = data.get('final_score', 0)
+        # Game data hazırla
+        game_data = {
+            'correct_answers': data.get('correct_answers', 0),
+            'total_questions': data.get('total_questions', 0),
+            'final_score': data.get('final_score', 0)
+        }
         
-        # 5 doğru cevap achievement'ı
-        if correct_answers >= 5 and not any(a.get('id') == 'STREAK_5' for a in user.get('achievements', [])):
-            unlocked_achievements.append({
-                'id': 'STREAK_5',
-                'name': 'Ateşli Seri', 
-                'description': '5 soru üst üste doğru cevapla',
-                'icon': '🔥'
-            })
-            
-        # 1000 puan achievement'ı
-        if final_score >= 1000 and not any(a.get('id') == 'SCORE_1000' for a in user.get('achievements', [])):
-            unlocked_achievements.append({
-                'id': 'SCORE_1000',
-                'name': 'Puan Avcısı',
-                'description': '1000 puan topla',
-                'icon': '🏆'
-            })
+        # Başarımları kontrol et
+        unlocked_achievements = check_achievements_for_user(user, game_data)
         
-        # Kazanılan başarımları kullanıcıya ekle
+        # Kazanılan başarımları kullanıcıya ekle (duplicate kontrolü add_achievements içinde)
         if unlocked_achievements:
             achievement_ids = [a['id'] for a in unlocked_achievements]
             user_model.add_achievements(current_user_id, achievement_ids, source='game')
         
         return jsonify({
             "unlocked_achievements": unlocked_achievements,
-            "message": f"{len(unlocked_achievements)} yeni başarım kazanıldı"
+            "message": f"{len(unlocked_achievements)} yeni başarım kazanıldı" if unlocked_achievements else "Yeni başarım yok"
         })
         
     except Exception as e:
         print(f"❌ Achievement kontrolü hatası: {e}")
+        return jsonify({"error": f"Sunucu hatası: {str(e)}"}), 500
+
+@game_bp.route('/achievements', methods=['GET'])
+@token_required
+def get_all_achievements(current_user_id):
+    """
+    Tüm başarımları ve kullanıcının durumunu döndürür.
+    """
+    try:
+        db = current_app.db
+        user_model = User(db)
+        user = user_model.find_by_id(current_user_id)
+        
+        if not user:
+            return jsonify({"error": "Kullanıcı bulunamadı"}), 404
+        
+        user_achievement_ids = set(a.get('id') for a in user.get('achievements', []))
+        
+        all_achievements = []
+        for achievement_id, achievement in ACHIEVEMENT_DEFINITIONS.items():
+            all_achievements.append({
+                'id': achievement['id'],
+                'name': achievement['name'],
+                'description': achievement['description'],
+                'icon': achievement['icon'],
+                'unlocked': achievement_id in user_achievement_ids
+            })
+        
+        return jsonify({
+            "achievements": all_achievements,
+            "unlocked_count": len(user_achievement_ids),
+            "total_count": len(ACHIEVEMENT_DEFINITIONS)
+        })
+        
+    except Exception as e:
+        print(f"❌ Başarımlar alınırken hata: {e}")
         return jsonify({"error": f"Sunucu hatası: {str(e)}"}), 500
 # --- SIDEBAR API ENDPOINTS ---
 

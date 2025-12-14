@@ -254,3 +254,100 @@ def update_leaderboard(current_user_id):
     """
 
     return jsonify({"message": "Liderlik tablosu güncellendi (simülasyon)"})
+
+@admin_bp.route('/cleanup-duplicate-achievements', methods=['POST'])
+@token_required
+@admin_required
+def cleanup_duplicate_achievements(current_user_id):
+    """
+    Tüm kullanıcıların duplicate başarımlarını temizler.
+    """
+    try:
+        db = current_app.db
+        user_model = User(db)
+        
+        # Tüm kullanıcıları al
+        users = list(db.users.find({}, {"_id": 1}))
+        cleaned_count = 0
+        
+        for user in users:
+            user_id = str(user['_id'])
+            if user_model.remove_duplicate_achievements(user_id):
+                cleaned_count += 1
+        
+        return jsonify({
+            "message": f"{cleaned_count} kullanıcının başarımları temizlendi",
+            "total_users": len(users),
+            "cleaned_users": cleaned_count
+        })
+    except Exception as e:
+        print(f"❌ Duplicate temizleme hatası: {e}")
+        return jsonify({"error": f"Sunucu hatası: {str(e)}"}), 500
+
+
+@admin_bp.route('/users', methods=['GET'])
+@token_required
+@admin_required
+def get_all_users(current_user_id):
+    """
+    Tüm kullanıcıları listeler (admin için).
+    """
+    try:
+        db = current_app.db
+        users = list(db.users.find({}, {
+            "password": 0  # Şifreyi gizle
+        }).sort("metadata.created_at", -1).limit(100))
+        
+        # ObjectId'leri string'e çevir
+        for user in users:
+            user["_id"] = str(user["_id"])
+            if "metadata" in user and "created_at" in user["metadata"]:
+                user["metadata"]["created_at"] = user["metadata"]["created_at"].isoformat() if user["metadata"]["created_at"] else None
+            if "metadata" in user and "last_login_at" in user["metadata"]:
+                user["metadata"]["last_login_at"] = user["metadata"]["last_login_at"].isoformat() if user["metadata"]["last_login_at"] else None
+        
+        return jsonify({"users": users, "total": len(users)})
+    except Exception as e:
+        print(f"❌ Kullanıcı listesi hatası: {e}")
+        return jsonify({"error": f"Sunucu hatası: {str(e)}"}), 500
+
+
+@admin_bp.route('/stats', methods=['GET'])
+@token_required
+@admin_required
+def get_admin_stats(current_user_id):
+    """
+    Admin dashboard için genel istatistikler.
+    """
+    try:
+        db = current_app.db
+        
+        total_users = db.users.count_documents({})
+        total_games = db.games.count_documents({})
+        total_words = db.words.count_documents({})
+        active_games = db.active_games.count_documents({})
+        
+        # Son 24 saat içinde giriş yapan kullanıcılar
+        from datetime import timedelta
+        yesterday = datetime.utcnow() - timedelta(days=1)
+        active_users_24h = db.users.count_documents({
+            "metadata.last_login_at": {"$gte": yesterday}
+        })
+        
+        # Son 7 gün içinde oynanan oyunlar
+        last_week = datetime.utcnow() - timedelta(days=7)
+        games_last_week = db.games.count_documents({
+            "start_time": {"$gte": last_week}
+        })
+        
+        return jsonify({
+            "total_users": total_users,
+            "total_games": total_games,
+            "total_words": total_words,
+            "active_games": active_games,
+            "active_users_24h": active_users_24h,
+            "games_last_week": games_last_week
+        })
+    except Exception as e:
+        print(f"❌ Admin stats hatası: {e}")
+        return jsonify({"error": f"Sunucu hatası: {str(e)}"}), 500

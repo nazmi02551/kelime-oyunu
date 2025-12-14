@@ -6,6 +6,7 @@ import EventBus from './EventBus';
 class AchievementManager {
   constructor() {
     // Achievement definitions (stateless). Do not mutate these objects directly.
+    // Bu tanımlar backend ile senkronize olmalı
     this.achievements = {
       FIRST_GAME: {
         id: 'FIRST_GAME',
@@ -21,7 +22,15 @@ class AchievementManager {
         description: '5 soru üst üste doğru cevapla',
         icon: '🔥',
         sound: 'levelup',
-        condition: (user) => user?.statistics?.current_streak >= 5,
+        condition: (user) => user?.statistics?.longest_streak >= 5,
+      },
+      STREAK_10: {
+        id: 'STREAK_10', 
+        name: 'Seri Ustası',
+        description: '10 doğru cevap serisi yap',
+        icon: '⚡',
+        sound: 'levelup',
+        condition: (user) => user?.statistics?.longest_streak >= 10,
       },
       PERFECT_GAME: {
         id: 'PERFECT_GAME',
@@ -39,6 +48,22 @@ class AchievementManager {
         sound: 'levelup',
         condition: (user) => user?.statistics?.total_score >= 1000,
       },
+      SCORE_5000: {
+        id: 'SCORE_5000',
+        name: 'Puan Ustası', 
+        description: '5000 puan topla',
+        icon: '💎',
+        sound: 'levelup',
+        condition: (user) => user?.statistics?.total_score >= 5000,
+      },
+      SCORE_10000: {
+        id: 'SCORE_10000',
+        name: 'Puan Efsanesi', 
+        description: '10000 puan topla',
+        icon: '👑',
+        sound: 'levelup',
+        condition: (user) => user?.statistics?.total_score >= 10000,
+      },
       CATEGORY_MASTER: {
         id: 'CATEGORY_MASTER',
         name: 'Kategori Ustası',
@@ -47,21 +72,13 @@ class AchievementManager {
         sound: 'achievement',
         condition: (user) => user?.statistics?.total_correct_answers >= 10,
       },
-      SPEED_DEMON: {
-        id: 'SPEED_DEMON',
-        name: 'Hız Canavarı',
-        description: 'Ortalama cevap süren 15 saniyenin altında olsun',
-        icon: '⚡',
-        sound: 'levelup',
-        condition: (user) => user?.statistics?.average_answer_time < 15,
-      },
       WORD_EXPLORER: {
         id: 'WORD_EXPLORER',
         name: 'Kelime Kaşifi',
         description: '50 farklı kelime çöz',
         icon: '🔍',
         sound: 'achievement',
-        condition: (user) => user?.statistics?.unique_words_played >= 50,
+        condition: (user) => user?.statistics?.total_correct_answers >= 50,
       },
       CONSISTENT_PLAYER: {
         id: 'CONSISTENT_PLAYER',
@@ -70,6 +87,22 @@ class AchievementManager {
         icon: '📅',
         sound: 'levelup',
         condition: (user) => user?.statistics?.games_played >= 10,
+      },
+      VETERAN_PLAYER: {
+        id: 'VETERAN_PLAYER',
+        name: 'Deneyimli Oyuncu',
+        description: '50 oyun tamamla',
+        icon: '🎖️',
+        sound: 'levelup',
+        condition: (user) => user?.statistics?.games_played >= 50,
+      },
+      HIGH_ACCURACY: {
+        id: 'HIGH_ACCURACY',
+        name: 'Keskin Nişancı',
+        description: '%80 üzeri başarı oranı (en az 20 soru)',
+        icon: '🎯',
+        sound: 'achievement',
+        condition: (user) => user?.statistics?.success_rate >= 80 && user?.statistics?.total_questions_answered >= 20,
       }
     };
   }

@@ -941,7 +941,14 @@ const GameScreen = ({ navigation }) => {
                   <View style={[componentStyles.game.infoCard, isMobile && { flex: 1 }]}><Text style={componentStyles.game.infoCardLabel}>KAZANÇ</Text><Text style={componentStyles.game.infoCardValue}>+{Math.max(0, mevcutKazanç)}</Text></View>
                 </View>
                 <Text style={componentStyles.game.questionInfo}>{oyunDurumu.soru_bilgisi}</Text>
-                <View style={componentStyles.game.wordDisplay}><Text style={[componentStyles.game.wordText, isMobile && { fontSize: 20, letterSpacing: 4 }]}>{oyunDurumu.kelime_gosterim}</Text></View>
+                <TouchableOpacity 
+                  style={componentStyles.game.wordDisplay} 
+                  onPress={() => !tahminModu && butonaBasFonk()}
+                  activeOpacity={tahminModu ? 1 : 0.7}
+                >
+                  <Text style={[componentStyles.game.wordText, isMobile && { fontSize: 20, letterSpacing: 4 }]}>{oyunDurumu.kelime_gosterim}</Text>
+                  {!tahminModu && <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 5 }}>Tahmin etmek için tıkla</Text>}
+                </TouchableOpacity>
                 <Text style={componentStyles.game.hintText}>{oyunDurumu.aciklama}</Text>
                 {oyunDurumu?.aciklanan_harfler?.length > 0 && (
                   <View style={componentStyles.game.revealedSection}>

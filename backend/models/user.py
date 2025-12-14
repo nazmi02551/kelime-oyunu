@@ -99,8 +99,8 @@ class User:
             # Başarı oranı
             success_rate = (total_correct / total_questions) * 100 if total_questions > 0 else 0.0
             
-            # Ortalama skor
-            average_score = total_score / games_played if games_played > 0 else 0
+            # Ortalama skor - TAM SAYI olarak
+            average_score = int(total_score / games_played) if games_played > 0 else 0
 
             # Seri güncellemeleri
             current_streak = max(current_streak, 0)  # Negatif olmamalı
@@ -110,11 +110,11 @@ class User:
                 "$set": {
                     "statistics.total_score": total_score,
                     "statistics.games_played": games_played,
-                    "statistics.average_score_per_game": round(average_score, 2),
+                    "statistics.average_score_per_game": average_score,  # Tam sayı
                     "statistics.current_streak": current_streak,
                     "statistics.longest_streak": longest_streak,
                     "statistics.total_questions_answered": total_questions,
-                    "statistics.success_rate": round(success_rate, 2),
+                    "statistics.success_rate": round(success_rate, 1),  # 1 ondalık yeterli
                     "metadata.last_game_at": datetime.utcnow()
                 },
                 "$inc": {
@@ -218,27 +218,84 @@ class User:
             print(f"❌ Zorluk güncelleme hatası: {e}")
             return False
 
-    # YENİ: Başarımları ekle (salt okunur olmayan, yalnızca yeni başarımları ekler)
+    # YENİ: Başarımları ekle - DUPLICATE KONTROLÜ İLE
     def add_achievements(self, user_id, achievement_ids, source='system'):
         """
         achievement_ids: list of achievement id strings
         Appends achievement objects to user's achievements array if not present.
         Each stored achievement: { id: str, unlocked_at: datetime, source: str }
+        DUPLICATE KONTROLÜ: Aynı ID'li başarım tekrar eklenmez.
         Returns True if the document was modified.
         """
         if not achievement_ids:
             return False
         try:
+            # Önce mevcut başarımları al
+            user = self.find_by_id(user_id)
+            if not user:
+                return False
+            
+            existing_ids = set(a.get('id') for a in user.get('achievements', []))
+            
+            # Sadece yeni başarımları ekle
             now = datetime.utcnow()
             to_add = []
             for aid in achievement_ids:
-                to_add.append({"id": aid, "unlocked_at": now, "source": source})
+                if aid not in existing_ids:
+                    to_add.append({"id": aid, "unlocked_at": now, "source": source})
+            
+            if not to_add:
+                print(f"ℹ️ Tüm başarımlar zaten mevcut: {achievement_ids}")
+                return False
 
             result = self.collection.update_one(
                 {"_id": ObjectId(user_id)},
-                {"$addToSet": {"achievements": {"$each": to_add}}}
+                {"$push": {"achievements": {"$each": to_add}}}
             )
+            
+            if result.modified_count > 0:
+                print(f"✅ {len(to_add)} yeni başarım eklendi: {[a['id'] for a in to_add]}")
             return result.modified_count > 0
         except Exception as e:
             print(f"❌ Başarımlar eklenirken hata: {e}")
+            return False
+    
+    def remove_duplicate_achievements(self, user_id):
+        """
+        Kullanıcının duplicate başarımlarını temizler.
+        Her başarım ID'si için sadece ilk kaydı tutar.
+        """
+        try:
+            user = self.find_by_id(user_id)
+            if not user:
+                return False
+            
+            achievements = user.get('achievements', [])
+            if not achievements:
+                return True
+            
+            # Unique başarımları bul (ilk eklenen korunur)
+            seen_ids = set()
+            unique_achievements = []
+            for achievement in achievements:
+                aid = achievement.get('id')
+                if aid and aid not in seen_ids:
+                    seen_ids.add(aid)
+                    unique_achievements.append(achievement)
+            
+            if len(unique_achievements) == len(achievements):
+                print(f"ℹ️ Duplicate başarım yok: {user_id}")
+                return True
+            
+            # Temizlenmiş listeyi kaydet
+            result = self.collection.update_one(
+                {"_id": ObjectId(user_id)},
+                {"$set": {"achievements": unique_achievements}}
+            )
+            
+            removed_count = len(achievements) - len(unique_achievements)
+            print(f"✅ {removed_count} duplicate başarım temizlendi: {user_id}")
+            return result.modified_count > 0
+        except Exception as e:
+            print(f"❌ Duplicate temizleme hatası: {e}")
             return False
