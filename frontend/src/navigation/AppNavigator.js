@@ -12,6 +12,8 @@ import LeaderboardScreen from '../screens/LeaderboardScreen';
 import DailyTasksScreen from '../screens/DailyTasksScreen';
 import FriendsScreen from '../screens/FriendsScreen';
 import AchievementsScreen from '../screens/AchievementsScreen';
+import MessagesScreen from '../screens/MessagesScreen';
+import ChatScreen from '../screens/ChatScreen';
 import { AuthContext } from '../context/AuthContext';
 import { responsiveSize, responsiveFont } from '../utils/dimensions';
 import { colors } from '../utils/colors';
@@ -114,6 +116,20 @@ const AppNavigator = () => {
             <Stack.Screen 
               name="Achievements" 
               component={AchievementsScreen} 
+              options={{ 
+                headerShown: false
+              }} 
+            />
+            <Stack.Screen 
+              name="Messages" 
+              component={MessagesScreen} 
+              options={{ 
+                headerShown: false
+              }} 
+            />
+            <Stack.Screen 
+              name="Chat" 
+              component={ChatScreen} 
               options={{ 
                 headerShown: false
               }} 

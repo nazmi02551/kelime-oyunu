@@ -261,7 +261,3 @@ class DailyTask:
             'reward_amount': reward_amount,
             'message': f'+{reward_amount} puan kazandınız!'
         }
-    
-    def get_task_definitions(self):
-        """Tüm görev tanımlarını döndürür."""
-        return list(self.TASK_DEFINITIONS.values())

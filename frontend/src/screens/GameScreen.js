@@ -873,6 +873,10 @@ const GameScreen = ({ navigation }) => {
                     <TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50 }]} onPress={() => navigation.navigate('Friends')}><Text style={componentStyles.game.menuButtonText}>👥 Arkadaşlar</Text></TouchableOpacity>
                   </View>
                   <View style={[componentStyles.game.buttonRow, { flexDirection: 'row', gap: 10, width: '100%' }]}>
+                    <TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50 }]} onPress={() => navigation.navigate('Messages')}><Text style={componentStyles.game.menuButtonText}>💬 Mesajlar</Text></TouchableOpacity>
+                    <TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50 }]} onPress={() => navigation.navigate('Achievements')}><Text style={componentStyles.game.menuButtonText}>🏅 Başarımlar</Text></TouchableOpacity>
+                  </View>
+                  <View style={[componentStyles.game.buttonRow, { flexDirection: 'row', gap: 10, width: '100%' }]}>
                     <TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50 }]} onPress={() => navigation.navigate('Profile')}><Text style={componentStyles.game.menuButtonText}>👤 Profilim</Text></TouchableOpacity>
                     <TouchableOpacity style={[componentStyles.game.menuButton, { flex: 1, minHeight: 50 }]} onPress={() => navigation.navigate('Leaderboard')}><Text style={componentStyles.game.menuButtonText}>🏆 Liderlik</Text></TouchableOpacity>
                   </View>

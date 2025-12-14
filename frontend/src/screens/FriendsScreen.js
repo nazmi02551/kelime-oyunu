@@ -186,20 +186,32 @@ const FriendsScreen = ({ navigation }) => {
       <View style={styles.friendInfo}>
         <Text style={styles.friendName}>{friend.username}</Text>
         <Text style={styles.friendStats}>
-          {friend.total_score || 0} puan • {friend.games_played || 0} oyun
+          {friend.statistics?.total_score || friend.total_score || 0} puan • {friend.statistics?.games_played || friend.games_played || 0} oyun
         </Text>
       </View>
-      <TouchableOpacity 
-        style={styles.removeButton}
-        onPress={() => removeFriend(friend.username)}
-        disabled={processingId === friend.username}
-      >
-        {processingId === friend.username ? (
-          <ActivityIndicator size="small" color={colors.danger} />
-        ) : (
-          <Text style={styles.removeButtonText}>✕</Text>
-        )}
-      </TouchableOpacity>
+      <View style={styles.friendActions}>
+        <TouchableOpacity 
+          style={styles.messageButton}
+          onPress={() => navigation.navigate('Chat', { 
+            friendUsername: friend.username,
+            friendId: friend.user_id || friend._id,
+            conversationId: null
+          })}
+        >
+          <Text style={styles.messageButtonText}>💬</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.removeButton}
+          onPress={() => removeFriend(friend.username)}
+          disabled={processingId === friend.username}
+        >
+          {processingId === friend.username ? (
+            <ActivityIndicator size="small" color={colors.danger} />
+          ) : (
+            <Text style={styles.removeButtonText}>✕</Text>
+          )}
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
@@ -525,6 +537,22 @@ const styles = {
     color: colors.textMuted,
     fontSize: 12,
     marginTop: 2,
+  },
+  friendActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  messageButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  messageButtonText: {
+    fontSize: 18,
   },
   removeButton: {
     width: 36,
