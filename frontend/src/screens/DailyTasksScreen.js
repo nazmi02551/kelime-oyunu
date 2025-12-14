@@ -9,13 +9,13 @@ import {
   RefreshControl,
   SafeAreaView,
   Platform,
-  Alert,
   Animated,
 } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
 import api from '../services/api';
 import { globalStyles, componentStyles } from '../styles/globalStyles';
 import { colors } from '../utils/colors';
+import Alert from '../utils/alert';
 
 const GradientView = ({ colors: gradientColors, style, children }) => {
   if (Platform.OS === 'web') {

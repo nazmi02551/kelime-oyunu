@@ -9,7 +9,6 @@ import {
   RefreshControl,
   SafeAreaView,
   Platform,
-  Alert,
   TextInput,
   Modal,
   FlatList,
@@ -18,6 +17,7 @@ import { AuthContext } from '../context/AuthContext';
 import api from '../services/api';
 import { globalStyles } from '../styles/globalStyles';
 import { colors } from '../utils/colors';
+import Alert from '../utils/alert';
 import achievementManager from '../services/AchievementManager';
 
 const GradientView = ({ colors: gradientColors, style, children }) => {

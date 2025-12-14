@@ -6,8 +6,7 @@ import {
   TextInput, 
   TouchableOpacity, 
   StyleSheet, 
-  ActivityIndicator, 
-  Alert, 
+  ActivityIndicator,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
@@ -18,6 +17,7 @@ import api from '../services/api';
 import { Picker } from '@react-native-picker/picker';
 import { responsiveSize, responsiveFont, responsivePadding } from '../utils/dimensions';
 import { colors } from '../utils/colors';
+import Alert from '../utils/alert';
 
 const { width, height } = Dimensions.get('window');
 

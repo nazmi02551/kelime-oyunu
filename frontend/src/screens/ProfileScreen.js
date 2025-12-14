@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Alert,
   RefreshControl,
   SafeAreaView,
   Platform,
@@ -18,6 +17,7 @@ import api from '../services/api';
 import { AuthContext } from '../context/AuthContext';
 import { globalStyles } from '../styles/globalStyles';
 import { colors } from '../utils/colors';
+import Alert from '../utils/alert';
 import { responsiveFont, responsivePadding } from '../utils/dimensions';
 import soundManager from '../services/SoundManager';
 import { handleApiError } from '../utils/errorHandler';

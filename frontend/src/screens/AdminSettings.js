@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Alert,
   Switch,
   RefreshControl,
   SafeAreaView,
@@ -21,6 +20,7 @@ import EventBus from '../services/EventBus';
 import { globalStyles, componentStyles } from '../styles/globalStyles';
 import { colors } from '../utils/colors';
 import { responsiveFont, responsivePadding } from '../utils/dimensions';
+import Alert from '../utils/alert';
 
 const { width, height } = Dimensions.get('window');
 

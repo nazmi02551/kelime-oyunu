@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useContext, useCallback, useMemo, memo } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   SafeAreaView,
   Text,
@@ -23,6 +22,7 @@ import { AuthContext } from '../context/AuthContext';
 import api from '../services/api';
 import GameMessage from '../components/GameMessage';
 import AchievementNotification from '../components/AchievementNotification';
+import Alert from '../utils/alert';
 import { globalStyles, componentStyles } from '../styles/globalStyles';
 import { colors } from '../utils/colors';
 import soundManager from '../services/SoundManager';

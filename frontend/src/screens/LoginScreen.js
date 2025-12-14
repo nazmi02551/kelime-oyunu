@@ -1,13 +1,14 @@
 // LoginScreen.js - TAM EKRAN UYUMLU GÜNCELLENMİŞ VERSİYON
 import React, { useState, useContext } from 'react';
 import { 
-  View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert,
+  View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator,
   KeyboardAvoidingView, Platform, Dimensions, SafeAreaView, StyleSheet
 } from 'react-native';
 import api from '../services/api';
 import { AuthContext } from '../context/AuthContext';
 import { globalStyles, componentStyles } from '../styles/globalStyles';
 import { colors } from '../utils/colors';
+import Alert from '../utils/alert';
 import { responsiveFont, responsivePadding } from '../utils/dimensions';
 
 const { width, height } = Dimensions.get('window');
