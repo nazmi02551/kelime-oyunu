@@ -86,6 +86,27 @@ const MultiplayerGameScreen = ({ route, navigation }) => {
     }
   };
 
+  const cancelGame = async () => {
+    Alert.confirm(
+      '🚫 Oyunu İptal Et',
+      'Bu oyunu iptal etmek istediğinize emin misiniz?',
+      async () => {
+        try {
+          const response = await api.post(`/api/multiplayer/cancel/${gameId}`);
+          if (response.data.success) {
+            Alert.alert('Bilgi', 'Oyun iptal edildi');
+            navigation.goBack();
+          } else {
+            Alert.alert('Hata', response.data.error || 'Oyun iptal edilemedi');
+          }
+        } catch (error) {
+          console.error('Oyun iptal hatası:', error);
+          Alert.alert('Hata', 'Oyun iptal edilemedi');
+        }
+      }
+    );
+  };
+
   const startTimer = () => {
     setTimeLeft(30);
     setQuestionStartTime(Date.now());
@@ -226,8 +247,25 @@ const MultiplayerGameScreen = ({ route, navigation }) => {
             <Text style={styles.waitingMessage}>Rakip bekleniyor...</Text>
           )}
           
-          <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()}>
+          <TouchableOpacity style={styles.cancelButton} onPress={cancelGame}>
             <Text style={styles.cancelButtonText}>İptal</Text>
+          </TouchableOpacity>
+        </GradientView>
+      </SafeAreaView>
+    );
+  }
+
+  // Oyun iptal edildi ekranı
+  if (game.status === 'cancelled') {
+    return (
+      <SafeAreaView style={[globalStyles.safeArea, styles.container]}>
+        <GradientView colors={[colors.warning, '#f39c12']} style={styles.resultContainer}>
+          <Text style={styles.resultEmoji}>🚫</Text>
+          <Text style={styles.resultTitle}>Oyun İptal Edildi</Text>
+          <Text style={styles.waitingMessage}>Bu oyun iptal edildi.</Text>
+          
+          <TouchableOpacity style={styles.homeButton} onPress={() => navigation.navigate('Game')}>
+            <Text style={styles.homeButtonText}>Ana Menü</Text>
           </TouchableOpacity>
         </GradientView>
       </SafeAreaView>
@@ -279,10 +317,16 @@ const MultiplayerGameScreen = ({ route, navigation }) => {
     <SafeAreaView style={[globalStyles.safeArea, styles.container]}>
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.scoreHeader}>
-          <Text style={styles.playerScore}>Sen: {game.my_score}</Text>
-          <Text style={styles.vsText}>VS</Text>
-          <Text style={styles.opponentScore}>{game.opponent_username}: {game.opponent_score}</Text>
+        <View style={styles.headerTop}>
+          <TouchableOpacity style={styles.exitButton} onPress={cancelGame}>
+            <Text style={styles.exitButtonText}>✕</Text>
+          </TouchableOpacity>
+          <View style={styles.scoreHeader}>
+            <Text style={styles.playerScore}>Sen: {game.my_score}</Text>
+            <Text style={styles.vsText}>VS</Text>
+            <Text style={styles.opponentScore}>{game.opponent_username}: {game.opponent_score}</Text>
+          </View>
+          <View style={{ width: 40 }} />
         </View>
         
         <View style={styles.progressContainer}>
@@ -499,11 +543,30 @@ const styles = {
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  scoreHeader: {
+  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 10,
+  },
+  exitButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(231, 76, 60, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  exitButtonText: {
+    color: colors.danger,
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  scoreHeader: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flex: 1,
   },
   playerScore: {
     color: colors.success,
@@ -513,6 +576,7 @@ const styles = {
   vsText: {
     color: colors.textMuted,
     fontSize: 14,
+    marginHorizontal: 10,
   },
   opponentScore: {
     color: colors.primary,

@@ -34,9 +34,9 @@ class MultiplayerGame:
         settings = game_settings or {}
         question_count = settings.get('question_count', 10)
         
-        # Kelimeleri seç
+        # Kelimeleri seç - metadata.is_active kullan
         words = list(self.words.aggregate([
-            {'$match': {'is_active': True}},
+            {'$match': {'metadata.is_active': True}},
             {'$sample': {'size': question_count}}
         ]))
         
@@ -50,15 +50,15 @@ class MultiplayerGame:
         if not player1 or not player2:
             return {'success': False, 'error': 'Oyuncu bulunamadı'}
         
-        # Soruları hazırla
+        # Soruları hazırla - Türkçe alan adları kullan
         questions = []
         for word in words:
             questions.append({
                 'word_id': str(word['_id']),
-                'word': word.get('word'),
-                'meaning': word.get('meaning'),
-                'category': word.get('category'),
-                'difficulty': word.get('difficulty', 'medium'),
+                'word': word.get('kelime'),
+                'meaning': word.get('aciklama'),
+                'category': word.get('kategori'),
+                'difficulty': word.get('zorluk', 'orta'),
                 'options': self._generate_options(word),
                 'player1_answer': None,
                 'player2_answer': None,
@@ -97,20 +97,20 @@ class MultiplayerGame:
     
     def _generate_options(self, word):
         """Kelime için şıkları oluşturur."""
-        correct_answer = word.get('meaning')
+        correct_answer = word.get('aciklama')  # Türkçe alan adı
         
         # Diğer kelimelerden yanlış şıklar al
         wrong_words = list(self.words.aggregate([
             {'$match': {
                 '_id': {'$ne': word['_id']},
-                'is_active': True
+                'metadata.is_active': True  # Doğru alan
             }},
             {'$sample': {'size': 3}}
         ]))
         
         options = [correct_answer]
         for w in wrong_words:
-            options.append(w.get('meaning'))
+            options.append(w.get('aciklama'))  # Türkçe alan adı
         
         # Eksik şık varsa doldur
         while len(options) < 4:
@@ -339,3 +339,28 @@ class MultiplayerGame:
             })
         
         return result
+
+    def cancel_game(self, game_id, user_id):
+        """Oyunu iptal eder."""
+        game = self.collection.find_one({'_id': ObjectId(game_id)})
+        if not game:
+            return {'success': False, 'error': 'Oyun bulunamadı'}
+        
+        # Bu oyuncu oyunda mı?
+        if game['player1'] != ObjectId(user_id) and game['player2'] != ObjectId(user_id):
+            return {'success': False, 'error': 'Bu oyuna erişiminiz yok'}
+        
+        # Sadece waiting veya in_progress durumundaki oyunlar iptal edilebilir
+        if game['status'] not in [self.STATUS_WAITING, self.STATUS_IN_PROGRESS]:
+            return {'success': False, 'error': 'Bu oyun zaten sonlanmış'}
+        
+        self.collection.update_one(
+            {'_id': ObjectId(game_id)},
+            {'$set': {
+                'status': self.STATUS_CANCELLED,
+                'cancelled_by': ObjectId(user_id),
+                'cancelled_at': datetime.utcnow()
+            }}
+        )
+        
+        return {'success': True, 'message': 'Oyun iptal edildi'}

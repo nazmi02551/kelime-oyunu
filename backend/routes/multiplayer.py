@@ -127,3 +127,23 @@ def get_active_games(current_user_id):
     except Exception as e:
         print(f"❌ Aktif oyunlar alınırken hata: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@multiplayer_bp.route('/cancel/<game_id>', methods=['POST'])
+@token_required
+def cancel_game(current_user_id, game_id):
+    """Multiplayer oyunu iptal eder."""
+    try:
+        db = current_app.db
+        mp_game = MultiplayerGame(db)
+        
+        result = mp_game.cancel_game(game_id, current_user_id)
+        
+        if result['success']:
+            return jsonify(result)
+        else:
+            return jsonify(result), 400
+        
+    except Exception as e:
+        print(f"❌ Oyun iptal edilirken hata: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500

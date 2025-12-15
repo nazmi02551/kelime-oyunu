@@ -6,14 +6,15 @@ class AppConfig {
     this.config = {
       // API Base URL'ler - Öncelik sırasına göre
       apiUrls: [
-        // Localhost öncelikli
-        'http://localhost:5000/api',
-        'http://127.0.0.1:5000/api',
+        // Localtunnel URL (internet üzerinden erişim)
+        'https://cruel-meals-like.loca.lt/api',
+        
+        // Local network IP (aynı WiFi için)
         'http://192.168.18.6:5000/api',
         
-        // Dev-tunnel URL'leri (telefon için)
-        'https://c0b7xhsw-5000.euw.devtunnels.ms/api',
-        'http://c0b7xhsw-5000.euw.devtunnels.ms/api',
+        // Localhost (web için)
+        'http://localhost:5000/api',
+        'http://127.0.0.1:5000/api',
       ],
       
       // App Ayarları
