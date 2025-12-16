@@ -42,11 +42,11 @@ export default function App() {
     <ThemeProvider>
       <AuthProvider>
         <NotificationProvider>
-          {/* Container düzeltildi */}
           <View style={styles.container}>
             <AppNavigator />
             <StatusBar style="light" />
           </View>
+          {/* Notification global overlay - her şeyin üstünde */}
         </NotificationProvider>
       </AuthProvider>
     </ThemeProvider>

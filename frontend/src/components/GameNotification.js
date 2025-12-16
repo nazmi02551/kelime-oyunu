@@ -102,12 +102,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    zIndex: 99999,
+    zIndex: 999999,
+    elevation: 999,
     pointerEvents: 'box-none',
     ...Platform.select({
       web: {
         position: 'fixed',
         pointerEvents: 'auto',
+      },
+      default: {
+        position: 'absolute',
       },
     }),
   },
