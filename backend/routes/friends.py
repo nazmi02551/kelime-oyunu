@@ -120,6 +120,26 @@ def respond_to_request(current_user_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@friends_bp.route('/cancel/<request_id>', methods=['DELETE'])
+@token_required
+def cancel_friend_request(current_user_id, request_id):
+    """Gönderilen arkadaşlık isteğini iptal eder."""
+    try:
+        db = current_app.db
+        friendship_model = Friendship(db)
+        
+        result = friendship_model.cancel_friend_request(current_user_id, request_id)
+        
+        if result['success']:
+            return jsonify(result)
+        else:
+            return jsonify(result), 400
+        
+    except Exception as e:
+        print(f"❌ Arkadaşlık isteği iptal edilirken hata: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @friends_bp.route('/remove', methods=['POST'])
 @token_required
 def remove_friend(current_user_id):

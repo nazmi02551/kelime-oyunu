@@ -1,7 +1,21 @@
 # models/multiplayer_game.py
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from bson import ObjectId
 import random
+
+def normalize_answer(text):
+    """Cevabı normalize et - boşlukları temizle, küçük harfe çevir"""
+    if not text:
+        return ""
+    text = str(text).strip().lower()
+    # Türkçe karakterleri normalize et
+    replacements = {
+        'ç': 'c', 'ğ': 'g', 'ı': 'i', 'ö': 'o', 'ş': 's', 'ü': 'u',
+        'Ç': 'c', 'Ğ': 'g', 'İ': 'i', 'Ö': 'o', 'Ş': 's', 'Ü': 'u'
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    return text
 
 class MultiplayerGame:
     """Çok oyunculu oyun sistemi."""
@@ -30,7 +44,12 @@ class MultiplayerGame:
     def create_game(self, player1_id, player2_id, game_settings=None):
         """
         Yeni multiplayer oyun oluşturur.
+        Önce her iki oyuncunun da aktif oyunlarını temizler.
         """
+        # Önce her iki oyuncunun da aktif oyunlarını temizle
+        self.cancel_user_active_games(player1_id)
+        self.cancel_user_active_games(player2_id)
+        
         settings = game_settings or {}
         question_count = settings.get('question_count', 10)
         
@@ -81,7 +100,7 @@ class MultiplayerGame:
             'player2_ready': False,
             'status': self.STATUS_WAITING,
             'settings': settings,
-            'created_at': datetime.utcnow(),
+            'created_at': datetime.now(timezone.utc),
             'started_at': None,
             'completed_at': None,
             'winner': None
@@ -145,7 +164,7 @@ class MultiplayerGame:
                 {'_id': ObjectId(game_id)},
                 {'$set': {
                     'status': self.STATUS_IN_PROGRESS,
-                    'started_at': datetime.utcnow()
+                    'started_at': datetime.now(timezone.utc)
                 }}
             )
             return {'success': True, 'message': 'Oyun başladı!', 'game_started': True}
@@ -159,13 +178,28 @@ class MultiplayerGame:
             return {'success': False, 'error': 'Oyun bulunamadı'}
         
         if game['status'] != self.STATUS_IN_PROGRESS:
-            return {'success': False, 'error': 'Oyun aktif değil'}
+            return {'success': False, 'error': f'Oyun aktif değil (status: {game["status"]})'}
         
-        if question_index >= len(game['questions']):
-            return {'success': False, 'error': 'Geçersiz soru'}
+        if question_index < 0 or question_index >= len(game['questions']):
+            return {'success': False, 'error': f'Geçersiz soru indexi: {question_index} (toplam: {len(game["questions"])})'}
         
         question = game['questions'][question_index]
-        is_correct = answer == question['meaning']
+        
+        # Debug log
+        print(f"🔍 Soru: {question.get('word')}")
+        print(f"🔍 Doğru cevap: '{question['meaning']}'")
+        print(f"🔍 Gelen cevap: '{answer}'")
+        
+        # None cevabı boş cevap anlamına gelir (zaman doldu)
+        is_correct = False
+        if answer is not None:
+            # Cevapları normalize ederek karşılaştır
+            normalized_answer = normalize_answer(answer)
+            normalized_correct = normalize_answer(question['meaning'])
+            is_correct = normalized_answer == normalized_correct
+            print(f"🔍 Normalized answer: '{normalized_answer}'")
+            print(f"🔍 Normalized correct: '{normalized_correct}'")
+            print(f"🔍 Karşılaştırma: {is_correct}")
         
         # Hangi oyuncu?
         if game['player1'] == ObjectId(user_id):
@@ -176,7 +210,8 @@ class MultiplayerGame:
             return {'success': False, 'error': 'Bu oyunda değilsiniz'}
         
         # Zaten cevaplamış mı?
-        if question.get(f'{player_prefix}_answer') is not None:
+        existing_answer = question.get(f'{player_prefix}_answer')
+        if existing_answer is not None and existing_answer != '':
             return {'success': False, 'error': 'Bu soruyu zaten cevapladınız'}
         
         # Skoru hesapla
@@ -186,15 +221,15 @@ class MultiplayerGame:
             time_bonus = max(0, 5 - int(time_taken / 2))  # Hızlı cevap bonusu
             score_earned = base_score + time_bonus
         
-        # Güncelle
+        # Güncelle - None cevapları empty string olarak sakla
         update = {
-            f'questions.{question_index}.{player_prefix}_answer': answer,
+            f'questions.{question_index}.{player_prefix}_answer': answer if answer is not None else '',
             f'questions.{question_index}.{player_prefix}_correct': is_correct,
             f'questions.{question_index}.{player_prefix}_time': time_taken,
         }
         
         # Skoru güncelle
-        self.collection.update_one(
+        result = self.collection.update_one(
             {'_id': ObjectId(game_id)},
             {
                 '$set': update,
@@ -202,12 +237,28 @@ class MultiplayerGame:
             }
         )
         
-        # Oyun bitti mi kontrol et
+        print(f"🎯 {player_prefix} soru {question_index}: {'✓' if is_correct else '✗'} (+{score_earned} puan)")
+        
+        # Oyun bitti mi kontrol et - her iki oyuncu da tüm sorulara cevap verdi mi?
         game = self.collection.find_one({'_id': ObjectId(game_id)})
-        all_answered = all(
-            q.get('player1_answer') is not None and q.get('player2_answer') is not None
-            for q in game['questions']
-        )
+        
+        # Soru sayısını kontrol et (boş liste için all() True döner)
+        question_count = len(game['questions'])
+        if question_count == 0:
+            return {
+                'success': True,
+                'is_correct': is_correct,
+                'score_earned': score_earned,
+                'correct_answer': question['meaning'],
+                'game_finished': False
+            }
+        
+        # Her soru için her iki oyuncu da cevaplamış mı? (None değil, gerçek değer)
+        p1_answered_count = sum(1 for q in game['questions'] if q.get('player1_answer') is not None and q.get('player1_answer') != '')
+        p2_answered_count = sum(1 for q in game['questions'] if q.get('player2_answer') is not None and q.get('player2_answer') != '')
+        all_answered = (p1_answered_count == question_count) and (p2_answered_count == question_count)
+        
+        print(f"🔍 P1 cevap: {p1_answered_count}/{question_count}, P2 cevap: {p2_answered_count}/{question_count}, all_answered: {all_answered}")
         
         if all_answered:
             self._finish_game(game_id)
@@ -216,12 +267,15 @@ class MultiplayerGame:
             'success': True,
             'is_correct': is_correct,
             'score_earned': score_earned,
-            'correct_answer': question['meaning']
+            'correct_answer': question['meaning'],
+            'game_finished': all_answered
         }
     
     def _finish_game(self, game_id):
         """Oyunu bitirir ve kazananı belirler."""
         game = self.collection.find_one({'_id': ObjectId(game_id)})
+        
+        print(f"🏁 Oyun bitiyor! P1: {game['player1_score']}, P2: {game['player2_score']}")
         
         winner = None
         if game['player1_score'] > game['player2_score']:
@@ -234,7 +288,7 @@ class MultiplayerGame:
             {'_id': ObjectId(game_id)},
             {'$set': {
                 'status': self.STATUS_COMPLETED,
-                'completed_at': datetime.utcnow(),
+                'completed_at': datetime.now(timezone.utc),
                 'winner': winner
             }}
         )
@@ -359,8 +413,34 @@ class MultiplayerGame:
             {'$set': {
                 'status': self.STATUS_CANCELLED,
                 'cancelled_by': ObjectId(user_id),
-                'cancelled_at': datetime.utcnow()
+                'cancelled_at': datetime.now(timezone.utc)
             }}
         )
         
         return {'success': True, 'message': 'Oyun iptal edildi'}
+    
+    def cancel_user_active_games(self, user_id):
+        """Kullanıcının tüm aktif oyunlarını iptal eder (yeni oyun başlatmadan önce)."""
+        try:
+            result = self.collection.update_many(
+                {
+                    '$or': [
+                        {'player1': ObjectId(user_id)},
+                        {'player2': ObjectId(user_id)}
+                    ],
+                    'status': {'$in': [self.STATUS_WAITING, self.STATUS_IN_PROGRESS]}
+                },
+                {'$set': {
+                    'status': self.STATUS_CANCELLED,
+                    'cancelled_by': ObjectId(user_id),
+                    'cancelled_at': datetime.now(timezone.utc),
+                    'cancel_reason': 'new_game_started'
+                }}
+            )
+            cancelled_count = result.modified_count
+            print(f"🧹 Kullanıcı {user_id} için {cancelled_count} aktif oyun iptal edildi")
+            return {'success': True, 'cancelled_count': cancelled_count}
+        except Exception as e:
+            print(f"❌ Aktif oyun temizliği hatası: {e}")
+            return {'success': False, 'error': str(e)}
+

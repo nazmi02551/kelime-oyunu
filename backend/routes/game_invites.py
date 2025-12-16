@@ -5,6 +5,14 @@ from routes.game import token_required
 
 game_invites_bp = Blueprint('game_invites', __name__)
 
+# SocketIO instance'ı - routes/multiplayer.py'den import edilecek
+socketio = None
+
+def init_socketio_invites(sio):
+    """SocketIO instance'ını ayarla"""
+    global socketio
+    socketio = sio
+
 @game_invites_bp.route('/send', methods=['POST'])
 @token_required
 def send_invite(current_user_id):
@@ -93,7 +101,10 @@ def respond_to_invite(current_user_id, invite_id):
         db = current_app.db
         invite_model = GameInvite(db)
         
+        print(f"📋 Davet yanıtlanıyor - ID: {invite_id}, Accept: {accept}, User: {current_user_id}")
+        
         result = invite_model.respond_to_invite(current_user_id, invite_id, accept)
+        print(f"📋 respond_to_invite sonucu: {result}")
         
         if result['success'] and accept:
             # Multiplayer oyun oluştur
@@ -103,18 +114,57 @@ def respond_to_invite(current_user_id, invite_id):
             opponent = result.get('opponent', {})
             game_settings = result.get('game_settings', {})
             
+            print(f"🎮 Multiplayer oyun oluşturuluyor - Player1: {opponent.get('user_id')}, Player2: {current_user_id}")
+            print(f"🎮 Oyun ayarları: {game_settings}")
+            
             game_result = mp_game.create_game(
                 opponent.get('user_id'),  # Daveti gönderen player1 olsun
                 current_user_id,           # Kabul eden player2 olsun
                 game_settings
             )
             
+            print(f"🎮 create_game sonucu: {game_result}")
+            
             if game_result['success']:
                 result['game_id'] = game_result['game_id']
                 result['message'] = 'Davet kabul edildi, oyun başlatıldı!'
+                
+                # ✅ DAVETI GÖNDERENE WebSocket bildirimi
+                if socketio:
+                    # Kabul edeni bul
+                    accepter = db.users.find_one({'_id': __import__('bson').ObjectId(current_user_id)})
+                    accepter_username = accepter.get('username', 'Bir kullanıcı') if accepter else 'Bir kullanıcı'
+                    
+                    socketio.emit('invite_accepted', {
+                        'game_id': game_result['game_id'],
+                        'accepted_by': current_user_id,
+                        'accepted_by_username': accepter_username,
+                        'question_count': game_settings.get('question_count', 10),
+                        'message': f'🎮 {accepter_username} oyun davetinizi kabul etti!'
+                    }, room=f'user_{opponent.get("user_id")}')
+                    print(f"📨 WebSocket: invite_accepted to user_{opponent.get('user_id')}")
             else:
                 result['warning'] = 'Oyun oluşturulamadı: ' + game_result.get('error', '')
+                print(f"⚠️ Oyun oluşturma başarısız: {game_result}")
         
+        elif result['success'] and not accept:
+            # ✅ DAVETI GÖNDERENE REDDEDİLDİ bildirimi
+            if socketio:
+                # Davet bilgilerini al
+                invite = db.game_invites.find_one({'_id': __import__('bson').ObjectId(invite_id)})
+                if invite:
+                    decliner = db.users.find_one({'_id': __import__('bson').ObjectId(current_user_id)})
+                    decliner_username = decliner.get('username', 'Bir kullanıcı') if decliner else 'Bir kullanıcı'
+                    
+                    socketio.emit('invite_declined', {
+                        'invite_id': invite_id,
+                        'declined_by': current_user_id,
+                        'declined_by_username': decliner_username,
+                        'message': f'{decliner_username} oyun davetinizi reddetti'
+                    }, room=f'user_{str(invite["from_user"])}')
+                    print(f"📨 WebSocket: invite_declined to user_{str(invite['from_user'])}")
+        
+        print(f"✅ Son sonuç: {result}")
         if result['success']:
             return jsonify(result)
         else:
@@ -122,6 +172,8 @@ def respond_to_invite(current_user_id, invite_id):
         
     except Exception as e:
         print(f"❌ Davete yanıt verilirken hata: {e}")
+        import traceback
+        print(f"❌ Hata detayı:\n{traceback.format_exc()}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -131,9 +183,30 @@ def cancel_invite(current_user_id, invite_id):
     """Daveti iptal eder."""
     try:
         db = current_app.db
-        invite_model = GameInvite(db)
         
+        # İptal etmeden önce davet bilgilerini al (WebSocket için)
+        invite = db.game_invites.find_one({
+            '_id': __import__('bson').ObjectId(invite_id),
+            'from_user': __import__('bson').ObjectId(current_user_id),
+            'status': 'pending'
+        })
+        
+        invite_model = GameInvite(db)
         result = invite_model.cancel_invite(current_user_id, invite_id)
+        
+        if result['success'] and invite:
+            # ✅ DAVETI ALAN TARAFA iptal bildirimi
+            if socketio:
+                canceller = db.users.find_one({'_id': __import__('bson').ObjectId(current_user_id)})
+                canceller_username = canceller.get('username', 'Bir kullanıcı') if canceller else 'Bir kullanıcı'
+                
+                socketio.emit('invite_cancelled', {
+                    'invite_id': invite_id,
+                    'cancelled_by': current_user_id,
+                    'cancelled_by_username': canceller_username,
+                    'message': f'{canceller_username} oyun davetini iptal etti'
+                }, room=f'user_{str(invite["to_user"])}')
+                print(f"📨 WebSocket: invite_cancelled to user_{str(invite['to_user'])}")
         
         if result['success']:
             return jsonify(result)

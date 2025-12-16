@@ -17,11 +17,12 @@ import api from '../services/api';
 import { Picker } from '@react-native-picker/picker';
 import { responsiveSize, responsiveFont, responsivePadding } from '../utils/dimensions';
 import { colors } from '../utils/colors';
-import Alert from '../utils/alert';
+import { useNotification } from '../context/NotificationContext';
 
 const { width, height } = Dimensions.get('window');
 
 const RegisterScreen = ({ navigation }) => {
+  const { showWarning, showSuccess, showError } = useNotification();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -58,7 +59,7 @@ const RegisterScreen = ({ navigation }) => {
 
   const doRegister = async () => {
     if (!username || !email || !password) {
-      Alert.alert('Uyarı', 'Kullanıcı adı, e-posta ve şifre gerekli.');
+      showWarning('Kullanıcı adı, e-posta ve şifre gerekli.');
       return;
     }
     setLoading(true);
@@ -72,10 +73,10 @@ const RegisterScreen = ({ navigation }) => {
         difficulty_preference: difficulty,
         categories: selectedCategories
       });
-      Alert.alert('Başarılı', 'Kayıt başarılı. Giriş yapabilirsiniz.');
+      showSuccess('Kayıt başarılı. Giriş yapabilirsiniz.');
       navigation.navigate('Login');
     } catch (err) {
-      Alert.alert('Hata', err.response?.data?.error || 'Kayıt başarısız.');
+      showError(err.response?.data?.error || 'Kayıt başarısız.');
     } finally {
       setLoading(false);
     }

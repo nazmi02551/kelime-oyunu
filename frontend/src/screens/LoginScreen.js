@@ -6,22 +6,23 @@ import {
 } from 'react-native';
 import api from '../services/api';
 import { AuthContext } from '../context/AuthContext';
+import { useNotification } from '../context/NotificationContext';
 import { globalStyles, componentStyles } from '../styles/globalStyles';
 import { colors } from '../utils/colors';
-import Alert from '../utils/alert';
 import { responsiveFont, responsivePadding } from '../utils/dimensions';
 
 const { width, height } = Dimensions.get('window');
 
 const LoginScreen = ({ navigation }) => {
   const { signIn } = useContext(AuthContext);
+  const { showWarning, showError } = useNotification();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   const doLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Uyarı', 'E-posta ve şifre gerekli.');
+      showWarning('E-posta ve şifre gerekli.');
       return;
     }
     setLoading(true);
@@ -35,7 +36,7 @@ const LoginScreen = ({ navigation }) => {
       console.log('🔐 2. API Response alındı:', res.status, res.data);
       
       if (!res.data?.token) {
-        Alert.alert('Hata', 'Giriş başarısız. Token alınamadı.');
+        showError('Giriş başarısız. Token alınamadı.');
         return;
       }
       
@@ -60,7 +61,7 @@ const LoginScreen = ({ navigation }) => {
                     || err.message 
                     || 'Sunucuya bağlanılamadı';
       
-      Alert.alert('Giriş Hatası', errorMsg);
+      showError(errorMsg);
     } finally {
       setLoading(false);
     }

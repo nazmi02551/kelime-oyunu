@@ -644,6 +644,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   scrollContent: {
+    flexGrow: 1,
     paddingBottom: responsivePadding(20),
   },
   header: {

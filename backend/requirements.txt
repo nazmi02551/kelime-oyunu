@@ -1,5 +1,7 @@
 Flask==2.3.2
 Flask-CORS==4.0.0
+flask-socketio==5.3.6
+python-socketio==5.11.1
 pymongo==4.4.1
 python-dotenv==1.0.0
 PyJWT==2.8.0

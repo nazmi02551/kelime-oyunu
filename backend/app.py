@@ -1,5 +1,6 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from flask_socketio import SocketIO, emit, join_room, leave_room
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 from datetime import datetime
@@ -20,6 +21,9 @@ from config import Config
 from init_db_schema import init_db_schema
 from models.active_game import ActiveGame
 from models.settings import Settings
+
+# Global SocketIO instance
+socketio = None
 
 
 def _get_database_from_uri(client, mongo_uri: str):
@@ -48,8 +52,18 @@ def _get_database_from_uri(client, mongo_uri: str):
 
 
 def create_app():
+    global socketio
     app = Flask(__name__)
     app.config.from_object(Config)
+    
+    # SocketIO Setup
+    socketio = SocketIO(
+        app,
+        cors_allowed_origins="*",
+        async_mode='threading',
+        logger=True,                # Debug için True yap
+        engineio_logger=True        # Debug için True yap
+    )
 
     # MongoDB bağlantısı
     try:
@@ -84,6 +98,21 @@ def create_app():
     # CORS
     CORS(app, resources={r"/api/*": {"origins": "*"}})
 
+    # Blueprint import - multiplayer'dan socketio init fonksiyonunu da al
+    from routes.auth import auth_bp
+    from routes.game import game_bp
+    from routes.admin import admin_bp
+    from routes.categories import categories_bp
+    from routes.leaderboard import leaderboard_bp
+    from routes.daily_tasks import daily_tasks_bp
+    from routes.friends import friends_bp
+    from routes.messages import messages_bp
+    from routes.game_invites import game_invites_bp, init_socketio_invites
+    from routes.multiplayer import multiplayer_bp, init_socketio
+    
+    # SocketIO'yu multiplayer ve game_invites route'larına enjekte et
+    init_socketio(socketio)
+    init_socketio_invites(socketio)
     # Blueprint'ler
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(game_bp, url_prefix='/api/game')
@@ -195,12 +224,37 @@ def create_app():
             'message': str(error),
             'status_code': 500
         }), 500
+    
+    # SocketIO Event Handlers
+    @socketio.on('connect')
+    def handle_connect():
+        print(f"🔌 Client connected: {request.sid}")
+    
+    @socketio.on('disconnect')
+    def handle_disconnect():
+        print(f"🔌 Client disconnected: {request.sid}")
+    
+    @socketio.on('join_user_room')
+    def handle_join_user_room(data):
+        """Kullanıcı kendi odasına katılır (bildirimler için)"""
+        user_id = data.get('user_id')
+        if user_id:
+            join_room(f'user_{user_id}')
+            print(f"👤 User {user_id} joined room")
+    
+    @socketio.on('join_game_room')
+    def handle_join_game_room(data):
+        """Oyuncu multiplayer oyun odasına katılır"""
+        game_id = data.get('game_id')
+        if game_id:
+            join_room(f'game_{game_id}')
+            print(f"🎮 Joined game room: {game_id}")
 
-    return app
+    return app, socketio
 
 
 if __name__ == '__main__':
-    app = create_app()
+    app, socketio = create_app()
 
     if app is None:
         print("❌ Uygulama başlatılamadı! MongoDB bağlantısı kurulamadı.")
@@ -219,16 +273,20 @@ if __name__ == '__main__':
     print("   • Categories: http://localhost:5000/api/categories")
     print("   • Leaderboard: http://localhost:5000/api/leaderboard")
     print("\n📱 Telefondan Erişim:")
-    print("   • http://192.168.43.229000/health")
+    print(f"   • http://192.168.18.6:5000/health")
+    print("\n🔌 WebSocket:")
+    print(f"   • ws://192.168.18.6:5000")
     print("\n🚀 Server başlatılıyor...")
     print("="*60 + "\n")
 
     try:
-        app.run(
-            debug=True,
+        # SocketIO ile server'ı başlat
+        socketio.run(
+            app,
+            debug=False,
             host='0.0.0.0',
             port=5000,
-            threaded=True
+            allow_unsafe_werkzeug=True
         )
     except KeyboardInterrupt:
         print("\n⏹️  Server durduruluyor...")

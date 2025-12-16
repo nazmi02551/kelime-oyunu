@@ -3,8 +3,8 @@
 // can probe multiple candidates (see src/config/app.js)
 import AppConfig from './app';
 
-// Default API host - Localtunnel for internet access
-const DEFAULT_API_URL = 'https://cruel-meals-like.loca.lt';
+// Default API host - Local network IP
+const DEFAULT_API_URL = 'http://192.168.18.6:5000';
 
 const ENV = {
   apiUrl: DEFAULT_API_URL,

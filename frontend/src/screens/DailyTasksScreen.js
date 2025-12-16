@@ -12,10 +12,10 @@ import {
   Animated,
 } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
+import { useNotification } from '../context/NotificationContext';
 import api from '../services/api';
 import { globalStyles, componentStyles } from '../styles/globalStyles';
 import { colors } from '../utils/colors';
-import Alert from '../utils/alert';
 
 const GradientView = ({ colors: gradientColors, style, children }) => {
   if (Platform.OS === 'web') {
@@ -35,6 +35,7 @@ const GradientView = ({ colors: gradientColors, style, children }) => {
 
 const DailyTasksScreen = ({ navigation }) => {
   const { user, refreshUserData } = useContext(AuthContext);
+  const { showSuccess, showError } = useNotification();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [tasks, setTasks] = useState([]);
@@ -50,12 +51,12 @@ const DailyTasksScreen = ({ navigation }) => {
       }
     } catch (error) {
       console.error('Günlük görevler yüklenemedi:', error);
-      Alert.alert('Hata', 'Günlük görevler yüklenemedi');
+      showError('Günlük görevler yüklenemedi');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [showError]);
 
   useEffect(() => {
     loadTasks();
@@ -71,14 +72,14 @@ const DailyTasksScreen = ({ navigation }) => {
     try {
       const response = await api.post(`/api/daily-tasks/claim/${taskId}`);
       if (response.data.success) {
-        Alert.alert('Tebrikler! 🎉', response.data.message);
+        showSuccess('Tebrikler! 🎉 ' + response.data.message);
         loadTasks();
         refreshUserData();
       } else {
-        Alert.alert('Hata', response.data.error || 'Ödül alınamadı');
+        showError(response.data.error || 'Ödül alınamadı');
       }
     } catch (error) {
-      Alert.alert('Hata', 'Ödül alınırken bir hata oluştu');
+      showError('Ödül alınırken bir hata oluştu');
     } finally {
       setClaimingTask(null);
     }
@@ -181,6 +182,7 @@ const DailyTasksScreen = ({ navigation }) => {
 
       <ScrollView
         style={styles.content}
+        contentContainerStyle={{ flexGrow: 1 }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }

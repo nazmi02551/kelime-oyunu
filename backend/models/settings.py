@@ -1,5 +1,5 @@
 # models/settings.py
-from datetime import datetime
+from datetime import datetime, timezone
 
 class Settings:
     def __init__(self, db):
@@ -25,7 +25,8 @@ class Settings:
                 "joker_costs": {"reveal_letter": 100, "reveal_half": 300, "skip_question": 400},
                 "max_harf_limit": 12,
                 "level_xp": 1000,
-                "created_at": datetime.utcnow()
+                "created_at": datetime.now(timezone.utc)
             }
             self.collection.insert_one(default_settings)
             print("✅ Default settings created in the database.")
+

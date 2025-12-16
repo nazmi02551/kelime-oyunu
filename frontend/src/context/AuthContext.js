@@ -1,8 +1,16 @@
 // frontend/src/context/AuthContext.js - GÜNCELLENMİŞ
 import React, { createContext, useState, useEffect, useCallback, useContext } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
+import socketService from '../services/SocketService';
 import eventBus from '../services/EventBus';
+
+// Web-compatible storage wrapper
+const storage = {
+  getItem: async (key) => localStorage.getItem(key),
+  setItem: async (key, value) => localStorage.setItem(key, value),
+  removeItem: async (key) => localStorage.removeItem(key),
+  clear: async () => localStorage.clear()
+};
 
 export const AuthContext = createContext({
   user: null,
@@ -39,7 +47,7 @@ export const AuthProvider = ({ children }) => {
       if (response.data && response.data.user) {
         const updatedUser = response.data.user;
         setUser(updatedUser);
-        await AsyncStorage.setItem('auth_user', JSON.stringify(updatedUser));
+        await storage.setItem('user', JSON.stringify(updatedUser));
         console.log('✅ Kullanıcı verisi güncellendi');
         return updatedUser;
       }
@@ -51,7 +59,7 @@ export const AuthProvider = ({ children }) => {
         if (verifyResponse.data && verifyResponse.data.user) {
           const updatedUser = verifyResponse.data.user;
           setUser(updatedUser);
-          await AsyncStorage.setItem('auth_user', JSON.stringify(updatedUser));
+          await storage.setItem('user', JSON.stringify(updatedUser));
           return updatedUser;
         }
       } catch (verifyError) {
@@ -76,8 +84,8 @@ export const AuthProvider = ({ children }) => {
         }
       };
       
-      // AsyncStorage'a da kaydet
-      AsyncStorage.setItem('auth_user', JSON.stringify(updatedUser));
+      // localStorage'a da kaydet
+      storage.setItem('user', JSON.stringify(updatedUser));
       return updatedUser;
     });
   }, [user]);
@@ -106,8 +114,8 @@ export const AuthProvider = ({ children }) => {
   const restoreAuth = async () => {
     try {
       console.log('🔐 Auth restore başladı...');
-      const storedToken = await AsyncStorage.getItem('auth_token');
-      const storedUser = await AsyncStorage.getItem('auth_user');
+      const storedToken = await storage.getItem('token');
+      const storedUser = await storage.getItem('user');
       
       console.log('Stored Token:', !!storedToken);
       console.log('Stored User:', !!storedUser);
@@ -120,6 +128,10 @@ export const AuthProvider = ({ children }) => {
         api.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
         
         console.log('✅ Token ve user restore edildi');
+        
+        // WebSocket bağlantısını kur
+        console.log('🔌 WebSocket bağlantısı kuruluyor...');
+        socketService.connect();
         
         // YENİ: Kullanıcı verisini güncelle
         setTimeout(() => {
@@ -138,14 +150,18 @@ export const AuthProvider = ({ children }) => {
     try {
       console.log('🔐 Sign in işlemi:', newUser?.username);
       
-      await AsyncStorage.setItem('auth_token', newToken);
-      await AsyncStorage.setItem('auth_user', JSON.stringify(newUser || {}));
+      await storage.setItem('token', newToken);
+      await storage.setItem('user', JSON.stringify(newUser || {}));
       
       setToken(newToken);
       setUser(newUser || null);
       
       // API instance'ına token'ı set et
       api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+      
+      // WebSocket bağlantısını kur
+      console.log('🔌 WebSocket bağlantısı kuruluyor...');
+      socketService.connect();
       
       console.log('✅ Sign in başarılı');
     } catch (error) {
@@ -157,14 +173,21 @@ export const AuthProvider = ({ children }) => {
   const signOut = async () => {
     try {
       console.log('🔐 Sign out işlemi');
-      await AsyncStorage.removeItem('auth_token');
-      await AsyncStorage.removeItem('auth_user');
+      await storage.removeItem('token');
+      await storage.removeItem('user');
+      // Clear old keys for backward compatibility
+      await storage.removeItem('auth_token');
+      await storage.removeItem('auth_user');
+      await storage.removeItem('userId');
       
       setToken(null);
       setUser(null);
       
       // API'den token'ı kaldır
       delete api.defaults.headers.common['Authorization'];
+      
+      // WebSocket bağlantısını kes
+      socketService.disconnect();
       
       console.log('✅ Sign out başarılı');
     } catch (error) {

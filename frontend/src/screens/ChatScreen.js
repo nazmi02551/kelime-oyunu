@@ -16,13 +16,14 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import api from '../services/api';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import Alert from '../utils/alert';
+import { useNotification } from '../context/NotificationContext';
 
 const ChatScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const { theme } = useTheme();
   const { user } = useAuth();
+  const { showError, showConfirm } = useNotification();
   
   const { conversationId: initialConversationId, friendUsername, friendId } = route.params || {};
   
@@ -148,14 +149,14 @@ const ChatScreen = () => {
         // Gerçek mesajla güncelle
         fetchMessages();
       } else {
-        Alert.alert('Hata', response.data.error || 'Mesaj gönderilemedi');
+        showError(response.data.error || 'Mesaj gönderilemedi');
         // Temp mesajı kaldır
         setMessages(prev => prev.filter(m => m._id !== tempMessage._id));
         setNewMessage(messageText);
       }
     } catch (error) {
       console.error('Mesaj gönderirken hata:', error);
-      Alert.alert('Hata', 'Mesaj gönderilemedi');
+      showError('Mesaj gönderilemedi');
       // Temp mesajı kaldır
       setMessages(prev => prev.filter(m => m._id !== tempMessage._id));
       setNewMessage(messageText);
@@ -204,30 +205,24 @@ const ChatScreen = () => {
       if (response.data.success) {
         setMessages(prev => prev.filter(m => m._id !== messageId && m.message_id !== messageId));
       } else {
-        Alert.alert('Hata', response.data.error || 'Mesaj silinemedi');
+        showError(response.data.error || 'Mesaj silinemedi');
       }
     } catch (error) {
       console.error('Mesaj silinirken hata:', error.response?.data || error.message);
-      Alert.alert('Hata', error.response?.data?.error || 'Mesaj silinemedi');
+      showError(error.response?.data?.error || 'Mesaj silinemedi');
     }
-  }, []);
+  }, [showError]);
 
   const handleLongPress = useCallback((item) => {
     if (!item.is_mine || item.pending) return;
     
-    Alert.alert(
+    showConfirm(
       'Mesaj İşlemleri',
       'Bu mesajı silmek istiyor musunuz?',
-      [
-        { text: 'İptal', style: 'cancel' },
-        { 
-          text: 'Sil', 
-          style: 'destructive',
-          onPress: () => deleteMessage(item._id)
-        }
-      ]
+      () => deleteMessage(item._id),
+      { confirmText: 'Sil', cancelText: 'İptal' }
     );
-  }, [deleteMessage]);
+  }, [deleteMessage, showConfirm]);
 
   const renderMessage = ({ item, index }) => {
     const isMe = item.is_mine;

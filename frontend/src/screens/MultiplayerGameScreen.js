@@ -11,10 +11,13 @@ import {
   Animated,
 } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
+import { useNotification } from '../context/NotificationContext';
 import api from '../services/api';
+import socketService from '../services/SocketService';
 import { globalStyles } from '../styles/globalStyles';
 import { colors } from '../utils/colors';
-import Alert from '../utils/alert';
+import GameNotification from '../components/GameNotification';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const GradientView = ({ colors: gradientColors, style, children }) => {
   if (Platform.OS === 'web') {
@@ -43,10 +46,18 @@ const MultiplayerGameScreen = ({ route, navigation }) => {
   const [answerSubmitted, setAnswerSubmitted] = useState(false);
   const [timeLeft, setTimeLeft] = useState(30);
   const [questionStartTime, setQuestionStartTime] = useState(null);
+  const [countdown, setCountdown] = useState(null); // 3-2-1 countdown
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [notification, setNotification] = useState(null);
   
   const timerRef = useRef(null);
   const pollRef = useRef(null);
   const progressAnim = useRef(new Animated.Value(1)).current;
+
+  const showNotification = (message, type = 'info') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 3000);
+  };
 
   const fetchGame = useCallback(async () => {
     if (!gameId) return;
@@ -54,57 +65,83 @@ const MultiplayerGameScreen = ({ route, navigation }) => {
     try {
       const response = await api.get(`/api/multiplayer/game/${gameId}`);
       if (response.data.success) {
-        setGame(response.data.game);
+        const gameData = response.data.game;
+        setGame(gameData);
         
-        // Oyun başladıysa timer başlat
-        if (response.data.game.status === 'in_progress' && !answerSubmitted) {
+        // Oyun tamamlandıysa
+        if (gameData.status === 'completed') {
+          clearInterval(timerRef.current);
+          clearInterval(pollRef.current);
+          return;
+        }
+        
+        // Her iki oyuncu da hazır oldu ve countdown başlamadıysa
+        if (gameData.status === 'waiting' && gameData.my_ready && gameData.opponent_ready && countdown === null) {
+          startCountdown();
+        }
+        
+        // Oyun başladıysa ve cevap verilmediyse timer başlat
+        if (gameData.status === 'in_progress' && !answerSubmitted && countdown === null) {
           startTimer();
         }
       } else {
-        Alert.alert('Hata', response.data.error || 'Oyun yüklenemedi');
-        navigation.goBack();
+        showNotification(response.data.error || 'Oyun yüklenemedi', 'error');
+        setTimeout(() => navigation.goBack(), 2000);
       }
     } catch (error) {
       console.error('Oyun yüklenemedi:', error);
-      Alert.alert('Hata', 'Oyun yüklenemedi');
+      showNotification('Oyun yüklenemedi', 'error');
     } finally {
       setLoading(false);
     }
-  }, [gameId, answerSubmitted]);
+  }, [gameId, answerSubmitted, countdown]);
+
+  const startCountdown = () => {
+    setCountdown(3);
+    const countdownInterval = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(countdownInterval);
+          setTimeout(() => {
+            setCountdown(null);
+            fetchGame(); // Oyun durumunu güncelle
+          }, 1000);
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
 
   const setPlayerReady = async () => {
     try {
       const response = await api.post(`/api/multiplayer/ready/${gameId}`);
       if (response.data.success) {
         if (response.data.game_started) {
-          Alert.alert('🎮', 'Oyun başlıyor!');
+          showNotification('🎮 Oyun başlıyor!', 'success');
         }
         fetchGame();
       }
     } catch (error) {
       console.error('Ready hatası:', error);
+      showNotification('Hazır işaretlenemedi', 'error');
     }
   };
 
   const cancelGame = async () => {
-    Alert.confirm(
-      '🚫 Oyunu İptal Et',
-      'Bu oyunu iptal etmek istediğinize emin misiniz?',
-      async () => {
-        try {
-          const response = await api.post(`/api/multiplayer/cancel/${gameId}`);
-          if (response.data.success) {
-            Alert.alert('Bilgi', 'Oyun iptal edildi');
-            navigation.goBack();
-          } else {
-            Alert.alert('Hata', response.data.error || 'Oyun iptal edilemedi');
-          }
-        } catch (error) {
-          console.error('Oyun iptal hatası:', error);
-          Alert.alert('Hata', 'Oyun iptal edilemedi');
-        }
+    setShowCancelDialog(false);
+    try {
+      const response = await api.post(`/api/multiplayer/cancel/${gameId}`);
+      if (response.data.success) {
+        showNotification('Oyun iptal edildi', 'info');
+        setTimeout(() => navigation.goBack(), 1500);
+      } else {
+        showNotification(response.data.error || 'Oyun iptal edilemedi', 'error');
       }
-    );
+    } catch (error) {
+      console.error('Oyun iptal hatası:', error);
+      showNotification('Oyun iptal edilemedi', 'error');
+    }
   };
 
   const startTimer = () => {
@@ -135,12 +172,16 @@ const MultiplayerGameScreen = ({ route, navigation }) => {
 
   const handleTimeUp = () => {
     if (!answerSubmitted) {
-      submitAnswer(null); // Süre doldu, boş cevap
+      submitAnswer(null); // Süre doldu, boş cevap gönder
     }
   };
 
   const submitAnswer = async (answer) => {
     if (answerSubmitted) return;
+    if (!game || !game.questions || currentQuestion >= game.questions.length) {
+      console.error('Geçersiz soru indexi:', currentQuestion, 'Toplam:', game?.questions?.length);
+      return;
+    }
     
     setSelectedAnswer(answer);
     setAnswerSubmitted(true);
@@ -156,28 +197,40 @@ const MultiplayerGameScreen = ({ route, navigation }) => {
       });
       
       if (response.data.success) {
-        // Kısa bir bekleme sonrası sonraki soruya geç
+        const totalQuestions = game.questions.length;
+        const isLastQuestion = currentQuestion >= totalQuestions - 1;
+        
+        // Kısa bir bekleme sonrası sonraki soruya geç veya oyunu güncelle
         setTimeout(() => {
-          if (currentQuestion < (game?.questions?.length || 0) - 1) {
+          if (!isLastQuestion) {
             setCurrentQuestion(prev => prev + 1);
             setSelectedAnswer(null);
             setAnswerSubmitted(false);
             startTimer();
           } else {
-            // Oyun bitti
+            // Son soruydu, oyun durumunu güncelle
+            showNotification('Oyun tamamlandı! Sonuçlar yükleniyor...', 'success');
             fetchGame();
           }
-        }, 2000);
+        }, 1500);
+      } else {
+        showNotification(response.data.error || 'Cevap gönderilemedi', 'error');
+        setSelectedAnswer(null);
+        setAnswerSubmitted(false);
       }
     } catch (error) {
       console.error('Cevap gönderme hatası:', error);
+      showNotification('Cevap gönderilemedi', 'error');
+      // Hata durumunda state'i resetle ama ilerleme
+      setSelectedAnswer(null);
+      setAnswerSubmitted(false);
     }
   };
 
-  // Polling - rakibin durumunu kontrol et
+  // Polling - rakibin durumunu kontrol et (5 saniyede bir)
   useEffect(() => {
     if (game?.status === 'waiting') {
-      pollRef.current = setInterval(fetchGame, 3000);
+      pollRef.current = setInterval(fetchGame, 5000); // 30s -> 5s
     } else if (pollRef.current) {
       clearInterval(pollRef.current);
     }
@@ -186,6 +239,99 @@ const MultiplayerGameScreen = ({ route, navigation }) => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
   }, [game?.status, fetchGame]);
+
+  // WebSocket bağlantısı ve event dinleyicileri
+  useEffect(() => {
+    let socketConnected = false;
+
+    const setupSocket = async () => {
+      console.log('🔌 MultiplayerGameScreen: WebSocket bağlanıyor...');
+      const socket = await socketService.connect();
+      if (!socket) {
+        console.warn('⚠️ Socket bağlantısı kurulamadı, polling kullanılıyor');
+        return;
+      }
+
+      socketConnected = true;
+      console.log('✅ MultiplayerGameScreen: Socket bağlı, listener\'lar ekleniyor');
+
+      // Oyun odasına katıl
+      socketService.joinGameRoom(gameId);
+      console.log(`🎮 Oyun odasına katılındı: ${gameId}`);
+
+      // Oyuncu hazır olduğunda
+      socketService.on('game_ready', (data) => {
+        console.log('🎮 [MultiplayerGame] Oyuncu hazır oldu:', data);
+        if (data.game_id === gameId) {
+          fetchGame(); // Oyun durumunu güncelle
+        }
+      });
+
+      // ✅ Oyun başladığında (her iki oyuncu da hazır)
+      socketService.on('game_started', (data) => {
+        console.log('🚀 [MultiplayerGame] Oyun başladı:', data);
+        if (data.game_id === gameId) {
+          showNotification('🎮 Her iki oyuncu da hazır! Oyun başlıyor...', 'success');
+          // WebSocket'ten countdown değeri geliyorsa kullan
+          if (data.countdown) {
+            setCountdown(data.countdown);
+            const countdownInterval = setInterval(() => {
+              setCountdown(prev => {
+                if (prev <= 1) {
+                  clearInterval(countdownInterval);
+                  setTimeout(() => {
+                    setCountdown(null);
+                    fetchGame(); // Oyun durumunu güncelle
+                  }, 1000);
+                  return 'BAŞLA!';
+                }
+                return prev - 1;
+              });
+            }, 1000);
+          } else {
+            startCountdown();
+          }
+        }
+      });
+
+      // Oyun güncellemesi
+      socketService.on('game_update', (data) => {
+        console.log('🔄 [MultiplayerGame] Oyun güncellendi:', data);
+        if (data.game_id === gameId) {
+          fetchGame();
+        }
+      });
+
+      // ✅ Oyun iptal edildi - hem game room hem user room'dan dinle
+      socketService.on('game_cancelled', (data) => {
+        console.log('❌ [MultiplayerGame] Oyun iptal edildi:', data);
+        if (data.game_id === gameId) {
+          const cancellerName = data.cancelled_by_username || 'Rakip';
+          showNotification(data.message || `${cancellerName} oyunu iptal etti`, 'warning');
+          setTimeout(() => navigation.goBack(), 2500);
+        }
+      });
+
+      // Oyun daveti (yeni oyun için)
+      socketService.on('game_invite', (data) => {
+        console.log('📨 [MultiplayerGame] Oyun daveti geldi:', data);
+        // Eğer bu ekrandayken yeni davet gelirse bildirimi göster
+      });
+    };
+
+    setupSocket();
+
+    return () => {
+      console.log('🧹 MultiplayerGameScreen: WebSocket listener\'ları temizleniyor');
+      if (socketConnected) {
+        socketService.off('game_ready');
+        socketService.off('game_started');
+        socketService.off('game_update');
+        socketService.off('game_cancelled');
+        socketService.off('game_invite');
+      }
+    };
+  }, [gameId, navigation]);
 
   useEffect(() => {
     fetchGame();
@@ -218,11 +364,37 @@ const MultiplayerGameScreen = ({ route, navigation }) => {
 
   // Bekleme ekranı
   if (game.status === 'waiting') {
+    // Countdown gösterimi
+    if (countdown !== null) {
+      return (
+        <SafeAreaView style={[globalStyles.safeArea, styles.container]}>
+          <GradientView colors={[colors.primary, colors.secondary]} style={styles.countdownContainer}>
+            <Text style={styles.countdownTitle}>🎮 Oyun Başlıyor!</Text>
+            <Text style={styles.countdownNumber}>
+              {typeof countdown === 'number' ? countdown : countdown}
+            </Text>
+            <Text style={styles.countdownHint}>Hazır ol!</Text>
+          </GradientView>
+        </SafeAreaView>
+      );
+    }
+    
     return (
       <SafeAreaView style={[globalStyles.safeArea, styles.container]}>
         <GradientView colors={[colors.primary, colors.secondary]} style={styles.waitingContainer}>
+          {/* Navigasyon */}
+          <View style={styles.navigationHeader}>
+            <TouchableOpacity style={styles.navButton} onPress={() => navigation.goBack()}>
+              <Text style={styles.navButtonText}>⬅️</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('Game')}>
+              <Text style={styles.navButtonText}>🏠</Text>
+            </TouchableOpacity>
+          </View>
+          
           <Text style={styles.waitingTitle}>🎮 Multiplayer Oyun</Text>
           <Text style={styles.opponentText}>Rakip: {game.opponent_username}</Text>
+          <Text style={styles.questionCountInfo}>Soru Sayısı: {game.questions?.length || 10}</Text>
           
           <View style={styles.readyStatus}>
             <View style={styles.readyItem}>
@@ -247,10 +419,21 @@ const MultiplayerGameScreen = ({ route, navigation }) => {
             <Text style={styles.waitingMessage}>Rakip bekleniyor...</Text>
           )}
           
-          <TouchableOpacity style={styles.cancelButton} onPress={cancelGame}>
+          <TouchableOpacity style={styles.cancelButton} onPress={() => setShowCancelDialog(true)}>
             <Text style={styles.cancelButtonText}>İptal</Text>
           </TouchableOpacity>
         </GradientView>
+        
+        {/* Cancel Dialog */}
+        <ConfirmDialog
+          visible={showCancelDialog}
+          title="🚫 Oyunu İptal Et"
+          message="Bu oyunu iptal etmek istediğinize emin misiniz?"
+          onConfirm={cancelGame}
+          onCancel={() => setShowCancelDialog(false)}
+          confirmText="İptal Et"
+          cancelText="Vazgeç"
+        />
       </SafeAreaView>
     );
   }
@@ -318,15 +501,22 @@ const MultiplayerGameScreen = ({ route, navigation }) => {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <TouchableOpacity style={styles.exitButton} onPress={cancelGame}>
-            <Text style={styles.exitButtonText}>✕</Text>
-          </TouchableOpacity>
+          <View style={styles.navButtons}>
+            <TouchableOpacity style={styles.smallNavButton} onPress={() => navigation.goBack()}>
+              <Text style={styles.smallNavButtonText}>⬅️</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.smallNavButton} onPress={() => navigation.navigate('Game')}>
+              <Text style={styles.smallNavButtonText}>🏠</Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.scoreHeader}>
             <Text style={styles.playerScore}>Sen: {game.my_score}</Text>
             <Text style={styles.vsText}>VS</Text>
             <Text style={styles.opponentScore}>{game.opponent_username}: {game.opponent_score}</Text>
           </View>
-          <View style={{ width: 40 }} />
+          <TouchableOpacity style={styles.exitButton} onPress={cancelGame}>
+            <Text style={styles.exitButtonText}>✕</Text>
+          </TouchableOpacity>
         </View>
         
         <View style={styles.progressContainer}>
@@ -385,6 +575,15 @@ const MultiplayerGameScreen = ({ route, navigation }) => {
           );
         })}
       </View>
+      
+      {/* Game Notification */}
+      {notification && (
+        <GameNotification
+          message={notification.message}
+          type={notification.type}
+          onHide={() => setNotification(null)}
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -416,6 +615,71 @@ const styles = {
     fontWeight: 'bold',
   },
   
+  // Countdown Screen
+  countdownContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  countdownTitle: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: 'bold',
+    marginBottom: 30,
+    textAlign: 'center',
+  },
+  countdownNumber: {
+    color: '#fff',
+    fontSize: 120,
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 10,
+  },
+  countdownHint: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 18,
+    fontWeight: '500',
+    marginTop: 30,
+  },
+  
+  // Navigation
+  navigationHeader: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    zIndex: 10,
+  },
+  navButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  navButtonText: {
+    fontSize: 20,
+  },
+  navButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  smallNavButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  smallNavButtonText: {
+    fontSize: 16,
+  },
+  
   // Waiting Screen
   waitingContainer: {
     flex: 1,
@@ -432,6 +696,11 @@ const styles = {
   opponentText: {
     color: 'rgba(255,255,255,0.9)',
     fontSize: 18,
+    marginBottom: 10,
+  },
+  questionCountInfo: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 14,
     marginBottom: 30,
   },
   readyStatus: {

@@ -1,5 +1,5 @@
 # models/game_invite.py
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from bson import ObjectId
 
 class GameInvite:
@@ -50,11 +50,12 @@ class GameInvite:
         if not self._are_friends(from_user_id, to_user_id):
             return {'success': False, 'error': 'Sadece arkadaşlarınıza davet gönderebilirsiniz'}
         
-        # Aktif davet kontrolü
+        # Aktif davet kontrolü - süresi dolmayanları kontrol et
         existing = self.collection.find_one({
             'from_user': ObjectId(from_user_id),
             'to_user': ObjectId(to_user_id),
-            'status': 'pending'
+            'status': 'pending',
+            'expires_at': {'$gt': datetime.now(timezone.utc)}
         })
         
         if existing:
@@ -74,8 +75,8 @@ class GameInvite:
             'to_username': to_user.get('username'),
             'game_settings': game_settings or {'question_count': 10},
             'status': 'pending',  # pending, accepted, declined, expired
-            'created_at': datetime.utcnow(),
-            'expires_at': datetime.utcnow() + timedelta(minutes=5)
+            'created_at': datetime.now(timezone.utc),
+            'expires_at': datetime.now(timezone.utc) + timedelta(minutes=5)
         }
         
         result = self.collection.insert_one(invite)
@@ -91,7 +92,7 @@ class GameInvite:
         invites = list(self.collection.find({
             'to_user': ObjectId(user_id),
             'status': 'pending',
-            'expires_at': {'$gt': datetime.utcnow()}
+            'expires_at': {'$gt': datetime.now(timezone.utc)}
         }).sort('created_at', -1))
         
         result = []
@@ -112,7 +113,7 @@ class GameInvite:
         invites = list(self.collection.find({
             'from_user': ObjectId(user_id),
             'status': 'pending',
-            'expires_at': {'$gt': datetime.utcnow()}
+            'expires_at': {'$gt': datetime.now(timezone.utc)}
         }).sort('created_at', -1))
         
         result = []
@@ -139,7 +140,13 @@ class GameInvite:
         if not invite:
             return {'success': False, 'error': 'Davet bulunamadı veya süresi dolmuş'}
         
-        if invite['expires_at'] < datetime.utcnow():
+        # Timezone-aware karşılaştırma için her iki datetime'i de UTC'ye çevir
+        expires_at = invite['expires_at']
+        if expires_at.tzinfo is None:
+            # Offset-naive ise UTC olarak varsay
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        
+        if expires_at < datetime.now(timezone.utc):
             self.collection.update_one(
                 {'_id': ObjectId(invite_id)},
                 {'$set': {'status': 'expired'}}
@@ -149,7 +156,7 @@ class GameInvite:
         new_status = 'accepted' if accept else 'declined'
         self.collection.update_one(
             {'_id': ObjectId(invite_id)},
-            {'$set': {'status': new_status, 'responded_at': datetime.utcnow()}}
+            {'$set': {'status': new_status, 'responded_at': datetime.now(timezone.utc)}}
         )
         
         if accept:
@@ -182,6 +189,6 @@ class GameInvite:
         count = self.collection.count_documents({
             'to_user': ObjectId(user_id),
             'status': 'pending',
-            'expires_at': {'$gt': datetime.utcnow()}
+            'expires_at': {'$gt': datetime.now(timezone.utc)}
         })
         return count

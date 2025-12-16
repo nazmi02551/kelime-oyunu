@@ -15,9 +15,9 @@ import {
 } from 'react-native';
 import api from '../services/api';
 import { AuthContext } from '../context/AuthContext';
+import { useNotification } from '../context/NotificationContext';
 import { globalStyles } from '../styles/globalStyles';
 import { colors } from '../utils/colors';
-import Alert from '../utils/alert';
 import { responsiveFont, responsivePadding } from '../utils/dimensions';
 import soundManager from '../services/SoundManager';
 import { handleApiError } from '../utils/errorHandler';
@@ -297,6 +297,7 @@ const AchievementCard = ({ user }) => {
 // ProfileScreen ana bileşeni
 const ProfileScreen = ({ navigation }) => {
   const { user, setUser } = useContext(AuthContext);
+  const { showSuccess, showError } = useNotification();
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [profile, setProfile] = useState({});
@@ -377,9 +378,9 @@ const ProfileScreen = ({ navigation }) => {
         } catch (e) {
           // ignore storage errors
         }
-        Alert.alert('Başarılı', 'Profil bilgileriniz güncellendi.');
+        showSuccess('Profil bilgileriniz güncellendi.');
       } else {
-        Alert.alert('Hata', 'Güncelleme başarısız.');
+        showError('Güncelleme başarısız.');
       }
     } catch (err) {
       const errorInfo = handleApiError(err);
@@ -387,7 +388,7 @@ const ProfileScreen = ({ navigation }) => {
                 : errorInfo.type === 'unauthorized' ? 'Oturumunuz sonlandırıldı. Lütfen tekrar giriş yapınız.'
                 : errorInfo.status === 400 ? 'Lütfen formu doğru şekilde doldurunuz.'
                 : errorInfo.message;
-      Alert.alert('Hata', msg);
+      showError(msg);
     } finally {
       setLoading(false);
     }

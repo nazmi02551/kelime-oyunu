@@ -19,10 +19,10 @@ import {
 } from 'react-native';
 import * as Speech from 'expo-speech';
 import { AuthContext } from '../context/AuthContext';
+import { useNotification } from '../context/NotificationContext';
 import api from '../services/api';
 import GameMessage from '../components/GameMessage';
 import AchievementNotification from '../components/AchievementNotification';
-import Alert from '../utils/alert';
 import { globalStyles, componentStyles } from '../styles/globalStyles';
 import { colors } from '../utils/colors';
 import soundManager from '../services/SoundManager';
@@ -106,6 +106,7 @@ const DifficultyIndicator = memo(({ user }) => {
 
 const GameScreen = ({ navigation }) => {
   const { user, logout, signOut, refreshUserData, updateUserStats } = useContext(AuthContext);
+  const { showInfo, showConfirm } = useNotification();
   const doLogout = logout || signOut || (() => {});
 
   // RESPONSIVE
@@ -189,13 +190,15 @@ const GameScreen = ({ navigation }) => {
         // Yeni davet varsa bildirim göster
         if (invites.length > 0 && !oyunBasladi) {
           const latestInvite = invites[0];
-          Alert.alert(
+          showConfirm(
             '🎮 Oyun Daveti',
             `${latestInvite.from_username} sizi ${latestInvite.game_settings?.question_count || 10} soruluk bir oyuna davet etti!`,
-            [
-              { text: 'Reddet', style: 'cancel', onPress: () => respondToInvite(latestInvite.invite_id, false) },
-              { text: 'Kabul Et', onPress: () => respondToInvite(latestInvite.invite_id, true) }
-            ]
+            () => respondToInvite(latestInvite.invite_id, true),
+            { 
+              confirmText: 'Kabul Et', 
+              cancelText: 'Reddet',
+              onCancel: () => respondToInvite(latestInvite.invite_id, false)
+            }
           );
         }
       }
@@ -258,6 +261,7 @@ const GameScreen = ({ navigation }) => {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
         setGameMessage({ type: 'error', text: 'Tarayıcınız sesli girişi desteklemiyor' });
+        setVoiceInputEnabled(false); // Desteklenmiyor, kapat
         return;
       }
       
@@ -270,21 +274,27 @@ const GameScreen = ({ navigation }) => {
         
         recognition.onstart = () => {
           setIsListening(true);
+          setGameMessage({ type: 'info', text: '🎤 Dinleniyor...' });
         };
         
         recognition.onresult = (event) => {
           const transcript = event.results[0][0].transcript;
           setTahmin(transcript.trim().toUpperCase());
           setIsListening(false);
+          setGameMessage({ type: 'success', text: `Algılanan: ${transcript}` });
         };
         
         recognition.onerror = (event) => {
           console.error('Ses tanıma hatası:', event.error);
           setIsListening(false);
           if (event.error === 'not-allowed') {
-            setGameMessage({ type: 'error', text: 'Mikrofon izni gerekli' });
+            setGameMessage({ type: 'error', text: 'Mikrofon izni reddedildi. Lütfen tarayıcı ayarlarından izni açın.' });
+            setVoiceInputEnabled(false); // İzin yok, otomatik başlatmayı kapat
           } else if (event.error === 'no-speech') {
-            setGameMessage({ type: 'info', text: 'Ses algılanamadı, tekrar deneyin' });
+            // Ses algılanamadı, sessizce devam et
+            console.log('Ses algılanamadı');
+          } else {
+            console.warn(`Ses hatası: ${event.error}`);
           }
         };
         
@@ -296,21 +306,21 @@ const GameScreen = ({ navigation }) => {
       } catch (error) {
         console.error('Ses tanıma başlatma hatası:', error);
         setIsListening(false);
+        setVoiceInputEnabled(false); // Hata oldu, kapat
       }
     } else {
-      // Native platformlar için basit bir çözüm - kullanıcıya bilgi ver
-      // expo-speech-recognition kurulabilir ama şimdilik web'de çalışıyor
-      setGameMessage({ type: 'info', text: 'Mobilde sesli giriş için lütfen web sürümünü kullanın veya manuel yazın' });
+      // Native platformlar için bilgi ver (sadece bir kez)
+      console.log('Mobilde sesli giriş web sürümünde çalışmaktadır');
     }
   }, [isListening]);
 
-  // Tahmin moduna geçildiğinde otomatik mikrofon başlat
+  // Tahmin moduna geçildiğinde otomatik mikrofon başlat (izin varsa)
   useEffect(() => {
-    if (tahminModu && voiceInputEnabled && Platform.OS === 'web') {
+    if (tahminModu && voiceInputEnabled && Platform.OS === 'web' && !isListening) {
       // Kısa gecikme ile mikrofonu başlat
       const timer = setTimeout(() => {
         startVoiceRecognition();
-      }, 300);
+      }, 500);
       return () => clearTimeout(timer);
     }
   }, [tahminModu, voiceInputEnabled, startVoiceRecognition]);

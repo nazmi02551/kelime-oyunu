@@ -3,6 +3,7 @@ import React from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { NotificationProvider } from './context/NotificationContext';
 import AppNavigator from './navigation/AppNavigator';
 import { StatusBar } from 'expo-status-bar';
 
@@ -40,11 +41,13 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        {/* Container düzeltildi */}
-        <View style={styles.container}>
-          <AppNavigator />
-          <StatusBar style="light" />
-        </View>
+        <NotificationProvider>
+          {/* Container düzeltildi */}
+          <View style={styles.container}>
+            <AppNavigator />
+            <StatusBar style="light" />
+          </View>
+        </NotificationProvider>
       </AuthProvider>
     </ThemeProvider>
   );

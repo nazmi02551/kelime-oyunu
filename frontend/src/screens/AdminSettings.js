@@ -15,12 +15,12 @@ import {
   Dimensions
 } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
+import { useNotification } from '../context/NotificationContext';
 import api from '../services/api';
 import EventBus from '../services/EventBus';
 import { globalStyles, componentStyles } from '../styles/globalStyles';
 import { colors } from '../utils/colors';
 import { responsiveFont, responsivePadding } from '../utils/dimensions';
-import Alert from '../utils/alert';
 
 const { width, height } = Dimensions.get('window');
 
@@ -47,6 +47,7 @@ const GradientView = ({ colors, style, children }) => {
 
 const AdminSettings = ({ navigation }) => {
   const { user, signOut } = useContext(AuthContext);
+  const { showSuccess, showError, showInfo, showWarning, showConfirm } = useNotification();
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -100,11 +101,8 @@ const AdminSettings = ({ navigation }) => {
   // Admin kontrolü - sadece admin kullanıcılar erişebilir
   useEffect(() => {
     if (!user?.is_admin) {
-      Alert.alert(
-        'Erişim Engellendi',
-        'Bu sayfaya erişim izniniz yok.',
-        [{ text: 'Tamam', onPress: () => navigation.goBack() }]
-      );
+      showError('Bu sayfaya erişim izniniz yok.');
+      navigation.goBack();
     } else {
       loadSettings();
       loadStats();
@@ -171,7 +169,7 @@ const AdminSettings = ({ navigation }) => {
     try {
       setSaving(true);
       const res = await api.post('/api/admin/settings', settings);
-      Alert.alert('Başarılı', 'Ayarlar başarıyla kaydedildi.');
+      showSuccess('Ayarlar başarıyla kaydedildi.');
       // Update local state if backend returned canonical settings
       const newSettings = (res && res.data) ? res.data : settings;
       if (newSettings) setSettings(newSettings);
@@ -179,7 +177,7 @@ const AdminSettings = ({ navigation }) => {
       EventBus.emit('admin:settings-updated', newSettings);
     } catch (error) {
       console.warn('Ayarlar kaydedilemedi:', error);
-      Alert.alert('Bilgi', 'Ayarlar demo modunda çalışıyor. Backend entegrasyonu için endpointleri kontrol edin.');
+      showInfo('Ayarlar demo modunda çalışıyor. Backend entegrasyonu için endpointleri kontrol edin.');
     } finally {
       setSaving(false);
     }
@@ -196,7 +194,7 @@ const AdminSettings = ({ navigation }) => {
     try {
       setLoading(true);
       const res = await api.post(`/api/admin/settings/rollback/${historyId}`);
-      Alert.alert('Başarılı', 'Ayarlar başarıyla geri alındı.');
+      showSuccess('Ayarlar başarıyla geri alındı.');
       // Fetch latest settings from server and notify app
       const settingsRes = await api.get('/api/admin/settings').catch(() => ({ data: null }));
       if (settingsRes && settingsRes.data) {
@@ -206,7 +204,7 @@ const AdminSettings = ({ navigation }) => {
       await loadSettingsHistory();
     } catch (error) {
       console.warn('Rollback başarısız:', error);
-      Alert.alert('Hata', 'Ayarlar geri alınırken hata oluştu. Lütfen tekrar deneyin.');
+      showError('Ayarlar geri alınırken hata oluştu. Lütfen tekrar deneyin.');
     } finally {
       setLoading(false);
     }
@@ -216,9 +214,9 @@ const AdminSettings = ({ navigation }) => {
     try {
       setLoading(true);
       const res = await api.post(`/api/admin/${action}`, params);
-      Alert.alert('Başarılı', res.data.message || 'İşlem başarıyla tamamlandı.');
+      showSuccess(res.data.message || 'İşlem başarıyla tamamlandı.');
     } catch (error) {
-      Alert.alert('Bilgi', 'Bu işlem demo modunda çalışıyor. Backend entegrasyonu için endpointleri kontrol edin.');
+      showInfo('Bu işlem demo modunda çalışıyor. Backend entegrasyonu için endpointleri kontrol edin.');
     } finally {
       setLoading(false);
     }
@@ -260,20 +258,14 @@ const AdminSettings = ({ navigation }) => {
                     <TouchableOpacity 
                       style={styles.rollbackButton}
                       onPress={() => {
-                        Alert.alert(
+                        showConfirm(
                           'Geri Al',
                           'Bu ayarlara geri dönmek istediğinizden emin misiniz?',
-                          [
-                            { text: 'İptal', onPress: () => {} },
-                            {
-                              text: 'Geri Al',
-                              onPress: () => {
-                                setShowHistoryModal(false);
-                                rollbackSettings(entry._id);
-                              },
-                              style: 'destructive',
-                            },
-                          ]
+                          () => {
+                            setShowHistoryModal(false);
+                            rollbackSettings(entry._id);
+                          },
+                          { confirmText: 'Geri Al', cancelText: 'İptal' }
                         );
                       }}
                     >
@@ -766,36 +758,29 @@ const AdminSettings = ({ navigation }) => {
       try {
         if (editingAchievement) {
           await api.put(`/api/admin/achievements/${achievement.id}`, achievement);
-          Alert.alert('Başarılı', 'Başarım güncellendi');
+          showSuccess('Başarım güncellendi');
         } else {
           await api.post('/api/admin/achievements', achievement);
-          Alert.alert('Başarılı', 'Başarım oluşturuldu');
+          showSuccess('Başarım oluşturuldu');
         }
         setEditingAchievement(null);
         setShowAddForm(false);
         loadAchievements();
       } catch (error) {
-        Alert.alert('Hata', error.response?.data?.error || 'İşlem başarısız');
+        showError(error.response?.data?.error || 'İşlem başarısız');
       }
     };
 
     const deleteAchievement = async (achievementId) => {
-      Alert.alert('Sil', 'Bu başarımı silmek istediğinize emin misiniz?', [
-        { text: 'İptal', style: 'cancel' },
-        {
-          text: 'Sil',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await api.delete(`/api/admin/achievements/${achievementId}`);
-              Alert.alert('Başarılı', 'Başarım silindi');
-              loadAchievements();
-            } catch (error) {
-              Alert.alert('Hata', 'Silme işlemi başarısız');
-            }
-          }
+      showConfirm('Sil', 'Bu başarımı silmek istediğinize emin misiniz?', async () => {
+        try {
+          await api.delete(`/api/admin/achievements/${achievementId}`);
+          showSuccess('Başarım silindi');
+          loadAchievements();
+        } catch (error) {
+          showError('Silme işlemi başarısız');
         }
-      ]);
+      }, { confirmText: 'Sil', cancelText: 'İptal' });
     };
 
     const AchievementForm = ({ data, onSave, onCancel }) => {
@@ -1001,36 +986,29 @@ const AdminSettings = ({ navigation }) => {
       try {
         if (editingTask) {
           await api.put(`/api/admin/daily-task-definitions/${task.id}`, task);
-          Alert.alert('Başarılı', 'Görev tanımı güncellendi');
+          showSuccess('Görev tanımı güncellendi');
         } else {
           await api.post('/api/admin/daily-task-definitions', task);
-          Alert.alert('Başarılı', 'Görev tanımı oluşturuldu');
+          showSuccess('Görev tanımı oluşturuldu');
         }
         setEditingTask(null);
         setShowAddForm(false);
         loadTasks();
       } catch (error) {
-        Alert.alert('Hata', error.response?.data?.error || 'İşlem başarısız');
+        showError(error.response?.data?.error || 'İşlem başarısız');
       }
     };
 
     const deleteTask = async (taskId) => {
-      Alert.alert('Sil', 'Bu görev tanımını silmek istediğinize emin misiniz?', [
-        { text: 'İptal', style: 'cancel' },
-        {
-          text: 'Sil',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await api.delete(`/api/admin/daily-task-definitions/${taskId}`);
-              Alert.alert('Başarılı', 'Görev tanımı silindi');
-              loadTasks();
-            } catch (error) {
-              Alert.alert('Hata', 'Silme işlemi başarısız');
-            }
-          }
+      showConfirm('Sil', 'Bu görev tanımını silmek istediğinize emin misiniz?', async () => {
+        try {
+          await api.delete(`/api/admin/daily-task-definitions/${taskId}`);
+          showSuccess('Görev tanımı silindi');
+          loadTasks();
+        } catch (error) {
+          showError('Silme işlemi başarısız');
         }
-      ]);
+      }, { confirmText: 'Sil', cancelText: 'İptal' });
     };
 
     const TaskForm = ({ data, onSave, onCancel }) => {

@@ -1,7 +1,7 @@
 # models/user.py - GÜNCELLENMİŞ
 from bson.objectid import ObjectId
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+from datetime import datetime, timezone
 import math
 
 class User:
@@ -40,15 +40,22 @@ class User:
             "achievements": [],
             "is_admin": bool(is_admin),
             "metadata": {
-                "created_at": datetime.utcnow(),
+                "created_at": datetime.now(timezone.utc),
                 "last_login_at": None,
                 "last_game_at": None
             }
         }
-        return self.collection.insert_one(user)
+        result = self.collection.insert_one(user)
+        if result.inserted_id:
+            user['_id'] = result.inserted_id
+            return user
+        return None
 
     def find_by_email(self, email):
         return self.collection.find_one({"email": email})
+    
+    def find_by_username(self, username):
+        return self.collection.find_one({"username": username})
 
     def find_by_id(self, user_id):
         try:
@@ -115,7 +122,7 @@ class User:
                     "statistics.longest_streak": longest_streak,
                     "statistics.total_questions_answered": total_questions,
                     "statistics.success_rate": round(success_rate, 1),  # 1 ondalık yeterli
-                    "metadata.last_game_at": datetime.utcnow()
+                    "metadata.last_game_at": datetime.now(timezone.utc)
                 },
                 "$inc": {
                     "statistics.total_correct_answers": correct_answers,
@@ -160,7 +167,7 @@ class User:
         try:
             result = self.collection.update_one(
                 {"_id": ObjectId(user_id)}, 
-                {"$set": {"metadata.last_login_at": datetime.utcnow()}}
+                {"$set": {"metadata.last_login_at": datetime.now(timezone.utc)}}
             )
             return result.modified_count > 0
         except Exception as e:
@@ -205,7 +212,7 @@ class User:
             update_data = {
                 "$set": {
                     "adaptive_difficulty.performance_score": max(0.1, min(1.0, performance_score)),
-                    "adaptive_difficulty.last_updated": datetime.utcnow()
+                    "adaptive_difficulty.last_updated": datetime.now(timezone.utc)
                 }
             }
             
@@ -238,7 +245,7 @@ class User:
             existing_ids = set(a.get('id') for a in user.get('achievements', []))
             
             # Sadece yeni başarımları ekle
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             to_add = []
             for aid in achievement_ids:
                 if aid not in existing_ids:

@@ -1,7 +1,13 @@
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import ENV from '../config/env';
 import eventBus from './EventBus';
+
+// Web-compatible storage wrapper
+const storage = {
+  getItem: async (key) => localStorage.getItem(key),
+  setItem: async (key, value) => localStorage.setItem(key, value),
+  removeItem: async (key) => localStorage.removeItem(key)
+};
 
 const baseURL = ENV.apiUrl || 'http://localhost:5000';
 console.log('🚀 Initial API Base URL (from ENV):', baseURL);
@@ -19,12 +25,12 @@ const api = axios.create({
 api.interceptors.request.use(
     async (config) => {
         try {
-            const token = await AsyncStorage.getItem('auth_token');
+            const token = await storage.getItem('token');
             if (token) {
                 config.headers.Authorization = `Bearer ${token}`;
             }
         } catch (e) {
-            console.warn('AsyncStorage error', e);
+            console.warn('localStorage error', e);
         }
         return config;
     },
@@ -133,7 +139,7 @@ api.interceptors.response.use(
                 });
 
                 if (refreshRes?.data?.token) {
-                    await AsyncStorage.setItem('auth_token', refreshRes.data.token);
+                    await storage.setItem('token', refreshRes.data.token);
                     api.defaults.headers.common['Authorization'] = `Bearer ${refreshRes.data.token}`;
                     originalRequest.headers['Authorization'] = `Bearer ${refreshRes.data.token}`;
                     return api(originalRequest);
@@ -144,8 +150,11 @@ api.interceptors.response.use(
 
             // If refresh failed, clear auth and emit logout so UI can react
             try {
-                await AsyncStorage.removeItem('auth_token');
-                await AsyncStorage.removeItem('auth_user');
+                await storage.removeItem('token');
+                await storage.removeItem('user');
+                // Clear old keys too
+                await storage.removeItem('auth_token');
+                await storage.removeItem('auth_user');
             } catch (e) {
                 console.warn('Error clearing auth on 401', e);
             }

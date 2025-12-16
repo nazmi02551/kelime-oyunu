@@ -3,6 +3,7 @@ from flask import Blueprint, request, jsonify, current_app
 from models.user import User
 import jwt
 import datetime
+from datetime import timezone
 from config import Config
 from bson.objectid import ObjectId
 
@@ -35,9 +36,31 @@ def register():
 
     if user_model.find_by_email(email):
         return jsonify({"error": "Bu e-posta zaten kayıtlı"}), 409
+    
+    if user_model.find_by_username(username):
+        return jsonify({"error": "Bu kullanıcı adı zaten kayıtlı"}), 409
 
-    user_model.create_user(username, email, password, profile_data, preferences, is_admin=False)
-    return jsonify({"message": "Kullanıcı başarıyla oluşturuldu"}), 201
+    new_user = user_model.create_user(username, email, password, profile_data, preferences, is_admin=False)
+    
+    if new_user:
+        # Token oluştur
+        token = jwt.encode({
+            'user_id': str(new_user['_id']),
+            'exp': datetime.datetime.now(timezone.utc) + datetime.timedelta(days=7)
+        }, Config.SECRET_KEY, algorithm='HS256')
+        
+        return jsonify({
+            "message": "Kullanıcı başarıyla oluşturuldu",
+            "token": token,
+            "user": {
+                "_id": str(new_user['_id']),
+                "username": new_user['username'],
+                "email": new_user['email'],
+                "statistics": new_user.get('statistics', {})
+            }
+        }), 201
+    else:
+        return jsonify({"error": "Kullanıcı oluşturulamadı"}), 500
 
 @auth_bp.route('/refresh', methods=['POST'])
 def refresh_token():
@@ -79,7 +102,7 @@ def refresh_token():
         # Yeni token oluştur
         new_token = jwt.encode({
             'user_id': str(user['_id']),
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+            'exp': datetime.datetime.now(timezone.utc) + datetime.timedelta(hours=24)
         }, Config.SECRET_KEY, algorithm="HS256")
         
         if isinstance(new_token, bytes):
@@ -118,7 +141,7 @@ def login():
     if user and user_model.check_password(user['password'], password):
         token = jwt.encode({
             'user_id': str(user['_id']),
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+            'exp': datetime.datetime.now(timezone.utc) + datetime.timedelta(hours=24)
         }, Config.SECRET_KEY, algorithm="HS256")
         if isinstance(token, bytes):
             token = token.decode('utf-8')

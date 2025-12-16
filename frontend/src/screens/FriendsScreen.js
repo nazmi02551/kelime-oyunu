@@ -12,13 +12,16 @@ import {
   TextInput,
   Modal,
   FlatList,
+  Dimensions,
 } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
+import { useNotification } from '../context/NotificationContext';
 import api from '../services/api';
+import socketService from '../services/SocketService';
 import { globalStyles } from '../styles/globalStyles';
 import { colors } from '../utils/colors';
-import Alert from '../utils/alert';
 import achievementManager from '../services/AchievementManager';
+import { responsiveFont, responsivePadding } from '../utils/dimensions';
 
 const GradientView = ({ colors: gradientColors, style, children }) => {
   if (Platform.OS === 'web') {
@@ -38,12 +41,15 @@ const GradientView = ({ colors: gradientColors, style, children }) => {
 
 const FriendsScreen = ({ navigation }) => {
   const { user } = useContext(AuthContext);
+  const { showSuccess, showError, showWarning, showInfo, showConfirm } = useNotification();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState('friends'); // friends, requests, search, invites
+  const [activeTab, setActiveTab] = useState('friends'); // friends, requests, sent-requests, invites, sent-invites, search
   const [friends, setFriends] = useState([]);
-  const [requests, setRequests] = useState([]);
+  const [requests, setRequests] = useState([]); // Gelen arkadaşlık istekleri
+  const [sentRequests, setSentRequests] = useState([]); // Giden arkadaşlık istekleri
   const [gameInvites, setGameInvites] = useState([]);
+  const [sentInvites, setSentInvites] = useState([]); // Gönderilen davetler
   const [searchResults, setSearchResults] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
@@ -51,6 +57,8 @@ const FriendsScreen = ({ navigation }) => {
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showQuestionCountModal, setShowQuestionCountModal] = useState(false);
+  const [selectedFriendForInvite, setSelectedFriendForInvite] = useState(null);
 
   const viewProfile = async (username) => {
     setProfileLoading(true);
@@ -60,12 +68,12 @@ const FriendsScreen = ({ navigation }) => {
       if (response.data.success) {
         setSelectedProfile(response.data.profile);
       } else {
-        Alert.alert('Hata', response.data.error || 'Profil yüklenemedi');
+        showError(response.data.error || 'Profil yüklenemedi');
         setShowProfileModal(false);
       }
     } catch (error) {
       console.error('Profil yüklenemedi:', error);
-      Alert.alert('Hata', 'Profil yüklenemedi');
+      showError('Profil yüklenemedi');
       setShowProfileModal(false);
     } finally {
       setProfileLoading(false);
@@ -95,6 +103,21 @@ const FriendsScreen = ({ navigation }) => {
     }
   }, []);
 
+  const loadSentRequests = useCallback(async () => {
+    try {
+      console.log('📤 Giden arkadaşlık istekleri yükleniyor...');
+      const response = await api.get('/api/friends/requests');
+      console.log('📨 Sent requests response:', response.data);
+      if (response.data.success) {
+        setSentRequests(response.data.sent || []);
+        console.log('✅ Giden istekler yüklendi:', response.data.sent?.length || 0);
+        console.log('📋 Giden istekler detay:', response.data.sent);
+      }
+    } catch (error) {
+      console.error('❌ Giden istekler yüklenemedi:', error);
+    }
+  }, []);
+
   const loadGameInvites = useCallback(async () => {
     try {
       const response = await api.get('/api/game-invites/pending');
@@ -102,20 +125,103 @@ const FriendsScreen = ({ navigation }) => {
         setGameInvites(response.data.invites || []);
       }
     } catch (error) {
-      console.error('Oyun davetleri yüklenemedi:', error);
+      console.error('Davetler yüklenemedi:', error);
+    }
+  }, []);
+
+  const loadSentInvites = useCallback(async () => {
+    try {
+      console.log('📩 Gönderilen oyun davetleri yükleniyor...');
+      const response = await api.get('/api/game-invites/sent');
+      console.log('📨 Sent invites response:', response.data);
+      if (response.data.success) {
+        setSentInvites(response.data.invites || []);
+        console.log('✅ Gönderilen davetler yüklendi:', response.data.invites?.length || 0);
+      }
+    } catch (error) {
+      console.error('❌ Gönderilen davetler yüklenemedi:', error);
     }
   }, []);
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    await Promise.all([loadFriends(), loadRequests(), loadGameInvites()]);
+    await Promise.all([loadFriends(), loadRequests(), loadSentRequests(), loadGameInvites(), loadSentInvites()]);
     setLoading(false);
     setRefreshing(false);
-  }, [loadFriends, loadRequests, loadGameInvites]);
+  }, [loadFriends, loadRequests, loadSentRequests, loadGameInvites, loadSentInvites]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // WebSocket listener'ları - davet kabul/red/iptal bildirimleri için
+  useEffect(() => {
+    const setupSocketListeners = async () => {
+      console.log('🔌 FriendsScreen: WebSocket listener\'ları kuruluyor...');
+      const socket = await socketService.connect();
+      
+      if (!socket) {
+        console.warn('⚠️ FriendsScreen: Socket bağlantısı kurulamadı');
+        return;
+      }
+
+      console.log('✅ FriendsScreen: Socket bağlı, listener\'lar ekleniyor');
+
+      // Davet kabul edildi - GÖNDEREN BU EVENT'İ ALIR
+      socketService.on('invite_accepted', (data) => {
+        console.log('📨 [FriendsScreen] Davet kabul edildi:', data);
+        const message = data.message || `${data.accepted_by_username} oyun davetinizi kabul etti!`;
+        showSuccess(message);
+        
+        // Oyun ekranına yönlendir
+        if (data.game_id) {
+          setTimeout(() => {
+            navigation.navigate('MultiplayerGame', { gameId: data.game_id });
+          }, 500);
+        }
+        loadSentInvites();
+      });
+
+      // Davet reddedildi
+      socketService.on('invite_declined', (data) => {
+        console.log('📨 [FriendsScreen] Davet reddedildi:', data);
+        showWarning(data.message || `${data.declined_by_username} davetinizi reddetti`);
+        loadSentInvites();
+      });
+
+      // Davet iptal edildi
+      socketService.on('invite_cancelled', (data) => {
+        console.log('📨 [FriendsScreen] Davet iptal edildi:', data);
+        showInfo(data.message || `${data.cancelled_by_username} davetini iptal etti`);
+        loadGameInvites();
+      });
+
+      // Yeni oyun daveti geldi
+      socketService.on('game_invite', (data) => {
+        console.log('📨 [FriendsScreen] Yeni oyun daveti:', data);
+        showInfo('🎮 Yeni oyun daveti aldınız!');
+        loadGameInvites();
+      });
+
+      // Oyun iptal edildi
+      socketService.on('game_cancelled', (data) => {
+        console.log('📨 [FriendsScreen] Oyun iptal edildi:', data);
+        showWarning(data.message || 'Oyun iptal edildi');
+      });
+    };
+
+    setupSocketListeners();
+
+    // Cleanup
+    return () => {
+      console.log('🧹 FriendsScreen: WebSocket listener\'ları temizleniyor');
+      socketService.off('invite_accepted');
+      socketService.off('invite_declined');
+      socketService.off('invite_cancelled');
+      socketService.off('game_invite');
+      socketService.off('game_cancelled');
+    };
+  }, [navigation, showSuccess, showWarning, showInfo, loadSentInvites, loadGameInvites]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -124,7 +230,7 @@ const FriendsScreen = ({ navigation }) => {
 
   const searchUsers = async () => {
     if (!searchQuery.trim() || searchQuery.trim().length < 2) {
-      Alert.alert('Uyarı', 'En az 2 karakter girin');
+      showWarning('En az 2 karakter girin');
       return;
     }
     
@@ -134,11 +240,11 @@ const FriendsScreen = ({ navigation }) => {
       if (response.data.success) {
         setSearchResults(response.data.users || []);
         if (response.data.users.length === 0) {
-          Alert.alert('Sonuç', 'Kullanıcı bulunamadı');
+          showInfo('Kullanıcı bulunamadı');
         }
       }
     } catch (error) {
-      Alert.alert('Hata', 'Arama yapılırken bir hata oluştu');
+      showError('Arama yapılırken bir hata oluştu');
     } finally {
       setSearching(false);
     }
@@ -149,16 +255,16 @@ const FriendsScreen = ({ navigation }) => {
     try {
       const response = await api.post('/api/friends/send', { to_username: toUsername });
       if (response.data.success) {
-        Alert.alert('Başarılı', 'Arkadaşlık isteği gönderildi');
+        showSuccess('Arkadaşlık isteği gönderildi');
         // Update search results to reflect the sent request
         setSearchResults(prev => prev.map(u => 
           u.username === toUsername ? { ...u, request_sent: true } : u
         ));
       } else {
-        Alert.alert('Hata', response.data.error || 'İstek gönderilemedi');
+        showError(response.data.error || 'İstek gönderilemedi');
       }
     } catch (error) {
-      Alert.alert('Hata', error.response?.data?.error || 'İstek gönderilemedi');
+      showError(error.response?.data?.error || 'İstek gönderilemedi');
     } finally {
       setProcessingId(null);
     }
@@ -172,105 +278,170 @@ const FriendsScreen = ({ navigation }) => {
         accept: accept
       });
       if (response.data.success) {
-        Alert.alert('Başarılı', accept ? 'Arkadaşlık isteği kabul edildi' : 'Arkadaşlık isteği reddedildi');
+        showSuccess(accept ? 'Arkadaşlık isteği kabul edildi' : 'Arkadaşlık isteği reddedildi');
         loadData();
       } else {
-        Alert.alert('Hata', response.data.error || 'İşlem başarısız');
+        showError(response.data.error || 'İşlem başarısız');
       }
     } catch (error) {
-      Alert.alert('Hata', 'İşlem sırasında bir hata oluştu');
+      showError('İşlem sırasında bir hata oluştu');
     } finally {
       setProcessingId(null);
     }
   };
 
   const removeFriend = async (friendUsername) => {
-    Alert.alert(
+    showConfirm(
       'Arkadaşı Sil',
       `${friendUsername} adlı kişiyi arkadaş listenizden silmek istediğinize emin misiniz?`,
-      [
-        { text: 'İptal', style: 'cancel' },
-        {
-          text: 'Sil',
-          style: 'destructive',
-          onPress: async () => {
-            setProcessingId(friendUsername);
-            try {
-              const response = await api.post('/api/friends/remove', { friend_username: friendUsername });
-              if (response.data.success) {
-                Alert.alert('Başarılı', 'Arkadaş silindi');
-                loadFriends();
-              } else {
-                Alert.alert('Hata', response.data.error || 'Silme işlemi başarısız');
-              }
-            } catch (error) {
-              console.error('Arkadaş silme hatası:', error);
-              Alert.alert('Hata', error.response?.data?.error || 'Silme işlemi başarısız');
-            } finally {
-              setProcessingId(null);
-            }
+      async () => {
+        setProcessingId(friendUsername);
+        try {
+          const response = await api.post('/api/friends/remove', { friend_username: friendUsername });
+          if (response.data.success) {
+            showSuccess('Arkadaş silindi');
+            loadFriends();
+          } else {
+            showError(response.data.error || 'Silme işlemi başarısız');
           }
+        } catch (error) {
+          console.error('Arkadaş silme hatası:', error);
+          showError(error.response?.data?.error || 'Silme işlemi başarısız');
+        } finally {
+          setProcessingId(null);
         }
-      ]
+      },
+      { confirmText: 'Sil', cancelText: 'İptal' }
+    );
+  };
+
+  // Arkadaşlık isteğini iptal et
+  const cancelFriendRequest = async (requestId) => {
+    console.log('🚫 İptal isteği gönderiliyor, requestId:', requestId);
+    showConfirm(
+      'İsteği İptal Et',
+      'Arkadaşlık isteğini iptal etmek istediğinize emin misiniz?',
+      async () => {
+        try {
+          console.log('✅ Kullanıcı onayladı, API çağrısı yapılıyor...');
+          setProcessingId(requestId);
+          const response = await api.delete(`/api/friends/cancel/${requestId}`);
+          console.log('📨 API yanıtı:', response.data);
+          if (response.data.success) {
+            showSuccess('İstek iptal edildi');
+            setSentRequests(prev => prev.filter(req => req.request_id !== requestId));
+          } else {
+            showError(response.data.error || 'İptal işlemi başarısız');
+          }
+        } catch (error) {
+          console.error('❌ İstek iptal hatası:', error);
+          showError('İptal işlemi başarısız');
+        } finally {
+          setProcessingId(null);
+        }
+      },
+      { confirmText: 'İptal Et', cancelText: 'Vazgeç' }
     );
   };
 
   const sendGameInvite = async (friend) => {
+    // Modal aç, soru sayısı seçimi yap
+    setSelectedFriendForInvite(friend);
+    setShowQuestionCountModal(true);
+  };
+
+  const confirmSendGameInvite = async (questionCount) => {
     try {
-      setProcessingId(friend.username);
-      console.log('Oyun daveti gönderiliyor:', friend.username);
+      setProcessingId(selectedFriendForInvite.username);
+      setShowQuestionCountModal(false);
+      console.log('Oyun daveti gönderiliyor:', selectedFriendForInvite.username, questionCount);
       const response = await api.post('/api/game-invites/send', {
-        to_username: friend.username,
-        game_settings: { question_count: 10 }
+        to_username: selectedFriendForInvite.username,
+        game_settings: { question_count: questionCount }
       });
       
       console.log('Davet yanıtı:', response.data);
       
       if (response.data.success) {
-        Alert.alert('Başarılı', response.data.message || 'Oyun daveti gönderildi!');
+        showSuccess(response.data.message || `${questionCount} soruluk oyun daveti gönderildi!`);
+        // Gönderilen davetleri yeniden yükle
+        if (activeTab === 'sent-invites') {
+          loadSentInvites();
+        }
       } else {
-        Alert.alert('Hata', response.data.error || 'Davet gönderilemedi');
+        showError(response.data.error || 'Davet gönderilemedi');
       }
     } catch (error) {
       console.error('Davet gönderme hatası:', error.response?.data || error.message);
-      Alert.alert('Hata', error.response?.data?.error || 'Davet gönderilemedi');
+      showError(error.response?.data?.error || 'Davet gönderilemedi');
     } finally {
       setProcessingId(null);
+      setSelectedFriendForInvite(null);
     }
   };
 
   const respondToGameInvite = async (inviteId, accept) => {
     try {
       setProcessingId(inviteId);
+      console.log(`Davet yanıtlanıyor: ${inviteId}, accept: ${accept}`);
+      
       const response = await api.post(`/api/game-invites/respond/${inviteId}`, { accept });
+      console.log('API yanıtı:', response.data);
+      
       if (response.data.success) {
         setGameInvites(prev => prev.filter(inv => inv.invite_id !== inviteId));
         if (accept && response.data.game_id) {
           // Multiplayer oyuna yönlendir
-          Alert.alert(
-            '🎮 Oyun Başlıyor!',
-            'Rakibiniz hazır olduğunda oyun başlayacak.',
-            [
-              {
-                text: 'Oyuna Git',
-                onPress: () => navigation.navigate('MultiplayerGame', { gameId: response.data.game_id })
-              }
-            ]
-          );
+          showSuccess('🎮 Oyun Başlıyor! Rakibiniz hazır olduğunda oyun başlayacak.');
+          setTimeout(() => {
+            navigation.navigate('MultiplayerGame', { gameId: response.data.game_id });
+          }, 500);
         } else if (accept) {
-          Alert.alert('Başarılı', response.data.message || 'Davet kabul edildi!');
+          showSuccess(response.data.message || 'Davet kabul edildi!');
         } else {
-          Alert.alert('Bilgi', 'Davet reddedildi');
+          showInfo('Davet reddedildi');
         }
       } else {
-        Alert.alert('Hata', response.data.error || 'İşlem başarısız');
+        console.error('API hatası:', response.data);
+        showError(response.data.error || 'İşlem başarısız');
       }
     } catch (error) {
       console.error('Davet yanıt hatası:', error);
-      Alert.alert('Hata', 'İşlem başarısız');
+      console.error('Hata detayı:', error.response?.data || error.message);
+      showError(error.response?.data?.error || 'İşlem başarısız');
     } finally {
       setProcessingId(null);
     }
+  };
+
+  // Gönderilen daveti iptal et
+  const cancelGameInvite = async (inviteId) => {
+    console.log('🚫 Oyun daveti iptali başlıyor, inviteId:', inviteId);
+    showConfirm(
+      'Daveti İptal Et',
+      'Gönderdiğiniz oyun davetini iptal etmek istediğinize emin misiniz?',
+      async () => {
+        try {
+          console.log('✅ Kullanıcı onayladı, API çağrısı yapılıyor...');
+          setProcessingId(inviteId);
+          const response = await api.delete(`/api/game-invites/cancel/${inviteId}`);
+          console.log('📨 Cancel API yanıtı:', response.data);
+          if (response.data.success) {
+            showSuccess('Davet iptal edildi');
+            setSentInvites(prev => prev.filter(inv => inv.invite_id !== inviteId));
+            console.log('✅ Davet listeden kaldırıldı');
+          } else {
+            showError(response.data.error || 'İptal işlemi başarısız');
+          }
+        } catch (error) {
+          console.error('❌ Davet iptal hatası:', error);
+          showError('İptal işlemi başarısız');
+        } finally {
+          setProcessingId(null);
+        }
+      },
+      { confirmText: 'İptal Et', cancelText: 'Vazgeç' }
+    );
   };
 
   const FriendCard = ({ friend }) => {
@@ -487,15 +658,63 @@ const FriendsScreen = ({ navigation }) => {
 
       case 'requests':
         return requests.length > 0 ? (
-          requests.map((request, index) => (
-            <RequestCard key={request.request_id || index} request={request} />
-          ))
+          <View>
+            <Text style={styles.sectionTitle}>← Gelen Arkadaşlık İstekleri ({requests.length})</Text>
+            {requests.map((request, index) => (
+              <RequestCard key={request.request_id || index} request={request} />
+            ))}
+          </View>
         ) : (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateIcon}>📬</Text>
-            <Text style={styles.emptyStateTitle}>Arkadaşlık isteği yok</Text>
+            <Text style={styles.emptyStateTitle}>Gelen istek yok</Text>
             <Text style={styles.emptyStateText}>
-              Yeni istekler burada görünecek
+              Gelen istekler burada görünecek
+            </Text>
+          </View>
+        );
+
+      case 'sent-requests':
+        return sentRequests.length > 0 ? (
+          <View>
+            <Text style={styles.sectionTitle}>📤 Giden Arkadaşlık İstekleri ({sentRequests.length})</Text>
+            {sentRequests.map((request, index) => (
+              <View key={request.request_id || index} style={styles.requestCard}>
+                <View style={styles.avatarContainer}>
+                  <Text style={styles.avatarText}>
+                    {(request.to_username || 'U').charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.requestInfo}>
+                  <Text style={styles.requestName}>{request.to_username}</Text>
+                  <Text style={styles.requestTime}>
+                    {request.status === 'pending' && '⏳ Yanıt bekleniyor'}
+                    {request.status === 'accepted' && '✅ Kabul Edildi'}
+                    {request.status === 'rejected' && '❌ Reddedildi'}
+                  </Text>
+                </View>
+                {request.status === 'pending' && (
+                  <TouchableOpacity 
+                    style={[styles.actionButton, styles.cancelButton]}
+                    onPress={() => cancelFriendRequest(request.request_id)}
+                    disabled={processingId === request.request_id}
+                  >
+                    {processingId === request.request_id ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={styles.actionButtonText}>✕</Text>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateIcon}>📤</Text>
+            <Text style={styles.emptyStateTitle}>Giden istek yok</Text>
+            <Text style={styles.emptyStateText}>
+              Gönderdiğiniz istekler burada görünecek
             </Text>
           </View>
         );
@@ -503,7 +722,7 @@ const FriendsScreen = ({ navigation }) => {
       case 'invites':
         return gameInvites.length > 0 ? (
           <View>
-            <Text style={styles.sectionTitle}>🎮 Oyun Davetleri ({gameInvites.length})</Text>
+            <Text style={styles.sectionTitle}>← 🎮 Gelen Oyun Davetleri ({gameInvites.length})</Text>
             {gameInvites.map((invite, index) => (
               <GameInviteCard key={invite.invite_id || index} invite={invite} />
             ))}
@@ -511,9 +730,55 @@ const FriendsScreen = ({ navigation }) => {
         ) : (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateIcon}>🎮</Text>
-            <Text style={styles.emptyStateTitle}>Oyun daveti yok</Text>
+            <Text style={styles.emptyStateTitle}>Gelen oyun daveti yok</Text>
             <Text style={styles.emptyStateText}>
               Arkadaşlarınızdan gelen davetler burada görünecek
+            </Text>
+          </View>
+        );
+
+      case 'sent-invites':
+        return sentInvites.length > 0 ? (
+          <View>
+            <Text style={styles.sectionTitle}>🎮 → Gönderilen Oyun Davetleri ({sentInvites.length})</Text>
+            {sentInvites.map((invite, index) => (
+              <View key={invite.invite_id || index} style={styles.inviteCard}>
+                <View style={styles.avatarContainer}>
+                  <Text style={styles.avatarText}>
+                    {(invite.to_username || 'U').charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.inviteInfo}>
+                  <Text style={styles.inviteName}>{invite.to_username}</Text>
+                  <Text style={styles.inviteDetails}>
+                    🎮 {invite.game_settings?.question_count || 10} soruluk davet
+                  </Text>
+                  <Text style={styles.inviteTime}>
+                    ⏳ Yanıt bekleniyor...
+                  </Text>
+                </View>
+                <View style={styles.inviteActions}>
+                  <TouchableOpacity 
+                    style={[styles.actionButton, styles.cancelButton]}
+                    onPress={() => cancelGameInvite(invite.invite_id)}
+                    disabled={processingId === invite.invite_id}
+                  >
+                    {processingId === invite.invite_id ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={styles.actionButtonText}>✕</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateIcon}>🎮</Text>
+            <Text style={styles.emptyStateTitle}>Gönderilen davet yok</Text>
+            <Text style={styles.emptyStateText}>
+              Arkadaşlarınıza oyun daveti gönderin
             </Text>
           </View>
         );
@@ -578,32 +843,92 @@ const FriendsScreen = ({ navigation }) => {
         <TouchableOpacity 
           style={[styles.tab, activeTab === 'friends' && styles.activeTab]}
           onPress={() => setActiveTab('friends')}
+          activeOpacity={0.7}
         >
           <Text style={[styles.tabText, activeTab === 'friends' && styles.activeTabText]}>
-            Arkadaşlar
+            👥
+          </Text>
+          <Text style={[styles.tabLabel, activeTab === 'friends' && styles.activeTabLabel]}>
+            Arkadaş
           </Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={[styles.tab, activeTab === 'requests' && styles.activeTab]}
           onPress={() => setActiveTab('requests')}
+          activeOpacity={0.7}
         >
-          <Text style={[styles.tabText, activeTab === 'requests' && styles.activeTabText]}>
-            İstekler {requests.length > 0 && `(${requests.length})`}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={[styles.tabText, activeTab === 'requests' && styles.activeTabText]}>
+              📥
+            </Text>
+            {requests.length > 0 && (
+              <Text style={styles.tabBadge}>{requests.length}</Text>
+            )}
+          </View>
+          <Text style={[styles.tabLabel, activeTab === 'requests' && styles.activeTabLabel]}>
+            Gelen
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.tab, activeTab === 'sent-requests' && styles.activeTab]}
+          onPress={() => setActiveTab('sent-requests')}
+          activeOpacity={0.7}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={[styles.tabText, activeTab === 'sent-requests' && styles.activeTabText]}>
+              📤
+            </Text>
+            {sentRequests.length > 0 && (
+              <Text style={styles.tabBadge}>{sentRequests.length}</Text>
+            )}
+          </View>
+          <Text style={[styles.tabLabel, activeTab === 'sent-requests' && styles.activeTabLabel]}>
+            Giden
           </Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={[styles.tab, activeTab === 'invites' && styles.activeTab]}
           onPress={() => setActiveTab('invites')}
+          activeOpacity={0.7}
         >
-          <Text style={[styles.tabText, activeTab === 'invites' && styles.activeTabText]}>
-            🎮 {gameInvites.length > 0 && `(${gameInvites.length})`}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={[styles.tabText, activeTab === 'invites' && styles.activeTabText]}>
+              🎮
+            </Text>
+            {gameInvites.length > 0 && (
+              <Text style={styles.tabBadge}>{gameInvites.length}</Text>
+            )}
+          </View>
+          <Text style={[styles.tabLabel, activeTab === 'invites' && styles.activeTabLabel]}>
+            Davet
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.tab, activeTab === 'sent-invites' && styles.activeTab]}
+          onPress={() => setActiveTab('sent-invites')}
+          activeOpacity={0.7}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={[styles.tabText, activeTab === 'sent-invites' && styles.activeTabText]}>
+              📩
+            </Text>
+            {sentInvites.length > 0 && (
+              <Text style={styles.tabBadge}>{sentInvites.length}</Text>
+            )}
+          </View>
+          <Text style={[styles.tabLabel, activeTab === 'sent-invites' && styles.activeTabLabel]}>
+            Gönder
           </Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={[styles.tab, activeTab === 'search' && styles.activeTab]}
           onPress={() => setActiveTab('search')}
+          activeOpacity={0.7}
         >
           <Text style={[styles.tabText, activeTab === 'search' && styles.activeTabText]}>
+            🔍
+          </Text>
+          <Text style={[styles.tabLabel, activeTab === 'search' && styles.activeTabLabel]}>
             Ara
           </Text>
         </TouchableOpacity>
@@ -611,12 +936,12 @@ const FriendsScreen = ({ navigation }) => {
 
       <ScrollView
         style={styles.content}
+        contentContainerStyle={{ flexGrow: 1, minHeight: '100%', paddingBottom: 20 }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
         {renderContent()}
-        <View style={{ height: 100 }} />
       </ScrollView>
 
       {/* Profil Modal */}
@@ -736,6 +1061,51 @@ const FriendsScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
+
+      {/* Soru Sayısı Seçim Modali */}
+      <Modal
+        visible={showQuestionCountModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          setShowQuestionCountModal(false);
+          setSelectedFriendForInvite(null);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.questionCountModal}>
+            <Text style={styles.questionCountTitle}>
+              🎮 Soru Sayısı Seçin
+            </Text>
+            <Text style={styles.questionCountSubtitle}>
+              {selectedFriendForInvite?.username} ile kaç soruluk oyun oynamak istersiniz?
+            </Text>
+            
+            <View style={styles.questionCountOptions}>
+              {[5, 10, 15, 20].map(count => (
+                <TouchableOpacity
+                  key={count}
+                  style={styles.questionCountButton}
+                  onPress={() => confirmSendGameInvite(count)}
+                >
+                  <Text style={styles.questionCountButtonText}>{count}</Text>
+                  <Text style={styles.questionCountButtonLabel}>soru</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            
+            <TouchableOpacity
+              style={styles.cancelQuestionCountButton}
+              onPress={() => {
+                setShowQuestionCountModal(false);
+                setSelectedFriendForInvite(null);
+              }}
+            >
+              <Text style={styles.cancelQuestionCountText}>İptal</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -743,16 +1113,25 @@ const FriendsScreen = ({ navigation }) => {
 const styles = {
   header: {
     paddingTop: Platform.OS === 'ios' ? 50 : 20,
-    paddingBottom: 20,
+    paddingBottom: 25,
     paddingHorizontal: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 15,
   },
   backButton: {
-    padding: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.15)',
   },
   backButtonText: {
     color: '#fff',
@@ -761,44 +1140,81 @@ const styles = {
   },
   headerTitle: {
     color: '#fff',
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
+    flex: 1,
   },
   headerStats: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 15,
-    paddingVertical: 6,
-    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   headerStatsText: {
     color: '#fff',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   tabBar: {
     flexDirection: 'row',
     backgroundColor: colors.card,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderBottomWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderBottomWidth: 2,
     borderBottomColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   tab: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
     alignItems: 'center',
-    borderRadius: 10,
+    justifyContent: 'center',
+    borderRadius: 12,
+    marginHorizontal: 3,
+    position: 'relative',
+    minHeight: 70,
   },
   activeTab: {
-    backgroundColor: colors.primary + '20',
+    backgroundColor: colors.primary + '15',
+    borderBottomWidth: 3,
+    borderBottomColor: colors.primary,
   },
   tabText: {
     color: colors.textMuted,
-    fontSize: 14,
+    fontSize: 20,
     fontWeight: '600',
+    marginBottom: 2,
   },
   activeTabText: {
     color: colors.primary,
+  },
+  tabLabel: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  activeTabLabel: {
+    color: colors.primary,
+    fontWeight: '700',
+    fontSize: 11,
+  },
+  tabBadge: {
+    color: '#fff',
+    backgroundColor: colors.danger,
+    fontWeight: 'bold',
+    fontSize: 10,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 4,
   },
   content: {
     flex: 1,
@@ -807,11 +1223,14 @@ const styles = {
   },
   loadingContainer: {
     alignItems: 'center',
+    justifyContent: 'center',
     padding: 50,
+    minHeight: 300,
   },
   loadingText: {
     color: colors.textMuted,
-    marginTop: 10,
+    marginTop: 15,
+    fontSize: 16,
   },
   friendCard: {
     flexDirection: 'row',
@@ -967,6 +1386,9 @@ const styles = {
   },
   rejectButton: {
     backgroundColor: colors.danger,
+  },
+  cancelButton: {
+    backgroundColor: colors.warning || '#ffc107',
   },
   actionButtonText: {
     color: '#fff',
@@ -1214,6 +1636,150 @@ const styles = {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  questionCountModal: {
+    backgroundColor: colors.card,
+    borderRadius: 20,
+    padding: 25,
+    width: '85%',
+    maxWidth: 400,
+  },
+  questionCountTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  questionCountSubtitle: {
+    fontSize: 14,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginBottom: 25,
+  },
+  questionCountOptions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 20,
+    gap: 10,
+  },
+  questionCountButton: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    borderRadius: 15,
+    paddingVertical: 20,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 90,
+  },
+  questionCountButtonText: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: 'bold',
+  },
+  questionCountButtonLabel: {
+    color: '#fff',
+    fontSize: 12,
+    marginTop: 5,
+    opacity: 0.9,
+  },
+  cancelQuestionCountButton: {
+    backgroundColor: colors.danger,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  cancelQuestionCountText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // MODERN STYLES - Admin/Profile tarzı
+  avatarContainerLarge: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    marginRight: 15,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 4,
+  },
+  avatarGradient: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarTextLarge: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  gameButtonModern: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginRight: 6,
+  },
+  messageButtonModern: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginRight: 6,
+  },
+  removeButtonModern: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  actionButtonGradient: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+  },
+  actionIconLarge: {
+    fontSize: 20,
+    color: '#fff',
+  },
+  inviteCardModern: {
+    flexDirection: 'row',
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 14,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
+  },
+  acceptButtonModern: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginRight: 8,
+  },
+  rejectButtonModern: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  actionButtonTextLarge: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  friendScore: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    marginTop: 4,
   },
 };
 

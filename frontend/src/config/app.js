@@ -6,9 +6,6 @@ class AppConfig {
     this.config = {
       // API Base URL'ler - Öncelik sırasına göre
       apiUrls: [
-        // Localtunnel URL (internet üzerinden erişim)
-        'https://cruel-meals-like.loca.lt/api',
-        
         // Local network IP (aynı WiFi için)
         'http://192.168.18.6:5000/api',
         

@@ -183,6 +183,25 @@ class Friendship:
         
         return sent
     
+    def cancel_friend_request(self, user_id, request_id):
+        """
+        Gönderilen arkadaşlık isteğini iptal eder.
+        """
+        request = self.collection.find_one({
+            '_id': ObjectId(request_id),
+            'from_user': ObjectId(user_id),
+            'status': self.STATUS_PENDING
+        })
+        
+        if not request:
+            return {'success': False, 'error': 'İstek bulunamadı'}
+        
+        self.collection.delete_one({
+            '_id': ObjectId(request_id)
+        })
+        
+        return {'success': True, 'message': 'Arkadaşlık isteği iptal edildi'}
+    
     def search_users(self, query, current_user_id, limit=20):
         """
         Kullanıcı araması yapar (arkadaş eklemek için).
