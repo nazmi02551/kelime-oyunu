@@ -4,12 +4,16 @@ import { Platform } from 'react-native';
 class AppConfig {
   constructor() {
     this.config = {
-      // API Base URL'ler - Öncelik sırasına göre
+      // API Base URL'ler - Öncelik sırasına göre denenir
+      // Yeni bir IP eklemek için buraya ekleyin
       apiUrls: [
-        // Local network IP (aynı WiFi için)
+        // Güncel network IP'niz (hotspot/farklı ağlar için)
+        'http://192.168.43.229:5000/api',
+        
+        // Eski network IP
         'http://192.168.18.6:5000/api',
         
-        // Localhost (web için)
+        // Localhost (web tarayıcı için)
         'http://localhost:5000/api',
         'http://127.0.0.1:5000/api',
       ],

@@ -273,7 +273,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
   },
-  },
   list: {
     padding: 12,
   },

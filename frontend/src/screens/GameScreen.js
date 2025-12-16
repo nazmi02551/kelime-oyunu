@@ -257,6 +257,19 @@ const GameScreen = ({ navigation }) => {
     if (isListening) return;
     
     if (Platform.OS === 'web') {
+      // HTTPS kontrolü - Mikrofon sadece HTTPS veya localhost'ta çalışır
+      const isSecureContext = window.isSecureContext;
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      
+      if (!isSecureContext && !isLocalhost) {
+        setGameMessage({ 
+          type: 'error', 
+          text: '🔒 Mikrofon sadece HTTPS bağlantısında çalışır. Localhost kullanın veya HTTPS etkinleştirin.' 
+        });
+        setVoiceInputEnabled(false);
+        return;
+      }
+      
       // Web Speech API kullan
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {

@@ -6,6 +6,7 @@ from pymongo.errors import ConnectionFailure
 from datetime import datetime
 from urllib.parse import urlparse
 import os
+import socket
 
 from routes.auth import auth_bp
 from routes.game import game_bp
@@ -95,8 +96,14 @@ def create_app():
         globals()['db'] = None
         return None
 
-    # CORS
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    # CORS - VS Code Dev Tunnels ve tüm origin'ler için
+    CORS(app, resources={
+        r"/api/*": {
+            "origins": "*",
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"]
+        }
+    })
 
     # Blueprint import - multiplayer'dan socketio init fonksiyonunu da al
     from routes.auth import auth_bp
@@ -260,22 +267,28 @@ if __name__ == '__main__':
         print("❌ Uygulama başlatılamadı! MongoDB bağlantısı kurulamadı.")
         raise SystemExit(1)
 
+    # Otomatik IP tespiti
+    try:
+        hostname = socket.gethostname()
+        local_ip = socket.gethostbyname(hostname)
+    except:
+        local_ip = "192.168.x.x"
+    
     print("\n" + "="*60)
     print("🎯 KELİME OYUNU BACKEND SERVİSİ")
     print("="*60)
-    print("📍 Health Check Endpoints:")
+    print("\n⚙️  BİLGİSAYARINIZIN IP ADRESİ:")
+    print(f"   📍 {local_ip}")
+    print("\n📝 Frontend'de kullanmak için:")
+    print(f"   frontend/src/config/env.js dosyasına şunu yazın:")
+    print(f"   const DEFAULT_API_URL = 'http://{local_ip}:5000';")
+    print("\n📍 Health Check Endpoints:")
     print("   • http://localhost:5000/health")
-    print("   • http://localhost:5000/api/health")
-    print("\n🌐 API Endpoints:")
-    print("   • Auth:       http://localhost:5000/api/auth")
-    print("   • Game:       http://localhost:5000/api/game")
-    print("   • Admin:      http://localhost:5000/api/admin")
-    print("   • Categories: http://localhost:5000/api/categories")
-    print("   • Leaderboard: http://localhost:5000/api/leaderboard")
-    print("\n📱 Telefondan Erişim:")
-    print(f"   • http://192.168.18.6:5000/health")
+    print(f"   • http://{local_ip}:5000/health")
+    print("\n🌐 API Base URL:")
+    print(f"   • http://{local_ip}:5000/api")
     print("\n🔌 WebSocket:")
-    print(f"   • ws://192.168.18.6:5000")
+    print(f"   • ws://{local_ip}:5000")
     print("\n🚀 Server başlatılıyor...")
     print("="*60 + "\n")
 
