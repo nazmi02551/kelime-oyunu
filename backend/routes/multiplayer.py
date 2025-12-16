@@ -119,11 +119,12 @@ def submit_answer(current_user_id, game_id):
     try:
         data = request.get_json() or {}
         question_index = data.get('question_index')
-        answer = data.get('answer')
+        answer = data.get('answer')  # None olabilir (süre doldu)
         time_taken = data.get('time_taken', 0)
         
-        if question_index is None or answer is None:
-            return jsonify({'success': False, 'error': 'Soru indeksi ve cevap gerekli'}), 400
+        # question_index None olmamalı ama answer None olabilir (süre doldu = boş cevap)
+        if question_index is None:
+            return jsonify({'success': False, 'error': 'Soru indeksi gerekli'}), 400
         
         db = current_app.db
         mp_game = MultiplayerGame(db)

@@ -572,18 +572,32 @@ const MultiplayerGameScreen = ({ route, navigation }) => {
       {/* Şıklar */}
       <View style={styles.optionsContainer}>
         {question?.options?.map((option, index) => {
+          // Renklendirme mantığı - frontend state'ine göre
           const isSelected = selectedAnswer === option;
-          const isCorrect = answerSubmitted && option === question?.my_answer && question?.my_correct;
-          const isWrong = answerSubmitted && isSelected && !question?.my_correct;
+          
+          // Cevap gönderildiyse renklendirme yap
+          let showCorrect = false;
+          let showWrong = false;
+          
+          if (answerSubmitted) {
+            // Doğru cevabı göster (yeşil)
+            if (option === question?.meaning) {
+              showCorrect = true;
+            }
+            // Seçilen yanlış cevabı göster (kırmızı) - sadece doğru cevap değilse
+            if (isSelected && option !== question?.meaning) {
+              showWrong = true;
+            }
+          }
           
           return (
             <TouchableOpacity
               key={index}
               style={[
                 styles.optionButton,
-                isSelected && styles.optionSelected,
-                isCorrect && styles.optionCorrect,
-                isWrong && styles.optionWrong,
+                isSelected && !answerSubmitted && styles.optionSelected, // Sadece henüz gönderilmediyse seçili göster
+                showCorrect && styles.optionCorrect,
+                showWrong && styles.optionWrong,
                 (answerSubmitted || timeLeft === 0) && styles.optionDisabled,
               ]}
               onPress={() => !answerSubmitted && timeLeft > 0 && submitAnswer(option)}
@@ -591,7 +605,7 @@ const MultiplayerGameScreen = ({ route, navigation }) => {
             >
               <Text style={[
                 styles.optionText,
-                (isSelected || isCorrect || isWrong) && styles.optionTextSelected
+                (showCorrect || showWrong) && styles.optionTextSelected
               ]}>
                 {String.fromCharCode(65 + index)}) {option}
               </Text>
