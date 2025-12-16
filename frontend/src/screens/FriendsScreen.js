@@ -105,16 +105,12 @@ const FriendsScreen = ({ navigation }) => {
 
   const loadSentRequests = useCallback(async () => {
     try {
-      console.log('📤 Giden arkadaşlık istekleri yükleniyor...');
       const response = await api.get('/api/friends/requests');
-      console.log('📨 Sent requests response:', response.data);
       if (response.data.success) {
         setSentRequests(response.data.sent || []);
-        console.log('✅ Giden istekler yüklendi:', response.data.sent?.length || 0);
-        console.log('📋 Giden istekler detay:', response.data.sent);
       }
     } catch (error) {
-      console.error('❌ Giden istekler yüklenemedi:', error);
+      console.error('Giden istekler yüklenemedi:', error);
     }
   }, []);
 
@@ -317,16 +313,13 @@ const FriendsScreen = ({ navigation }) => {
 
   // Arkadaşlık isteğini iptal et
   const cancelFriendRequest = async (requestId) => {
-    console.log('🚫 İptal isteği gönderiliyor, requestId:', requestId);
     showConfirm(
       'İsteği İptal Et',
       'Arkadaşlık isteğini iptal etmek istediğinize emin misiniz?',
       async () => {
         try {
-          console.log('✅ Kullanıcı onayladı, API çağrısı yapılıyor...');
           setProcessingId(requestId);
           const response = await api.delete(`/api/friends/cancel/${requestId}`);
-          console.log('📨 API yanıtı:', response.data);
           if (response.data.success) {
             showSuccess('İstek iptal edildi');
             setSentRequests(prev => prev.filter(req => req.request_id !== requestId));
@@ -675,12 +668,6 @@ const FriendsScreen = ({ navigation }) => {
         );
 
       case 'sent-requests':
-        console.log('🔍 Rendering sent-requests tab, sentRequests:', sentRequests);
-        console.log('📊 sentRequests.length:', sentRequests.length);
-        sentRequests.forEach((req, idx) => {
-          console.log(`  Request ${idx}: status="${req.status}", to="${req.to_username}", id="${req.request_id}"`);
-        });
-        
         return sentRequests.length > 0 ? (
           <View>
             <Text style={styles.sectionTitle}>📤 Giden Arkadaşlık İstekleri ({sentRequests.length})</Text>
