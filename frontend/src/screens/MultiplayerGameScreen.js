@@ -81,7 +81,8 @@ const MultiplayerGameScreen = ({ route, navigation }) => {
         }
         
         // Oyun başladıysa ve cevap verilmediyse timer başlat
-        if (gameData.status === 'in_progress' && !answerSubmitted && countdown === null) {
+        // ⚠️ Timer zaten çalışıyorsa tekrar başlatma (diğer oyuncu cevap verince resetlemesin)
+        if (gameData.status === 'in_progress' && !answerSubmitted && countdown === null && timerRef.current === null) {
           startTimer();
         }
       } else {
