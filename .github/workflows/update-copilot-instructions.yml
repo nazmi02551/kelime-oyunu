@@ -1,0 +1,77 @@
+name: Update Copilot Instructions
+
+# Trigger: Her hafta Pazartesi veya manuel
+on:
+  schedule:
+    - cron: '0 9 * * 1'  # Her Pazartesi sabah 9:00
+  workflow_dispatch:  # Manuel tetikleme
+  
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-instructions:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Tüm geçmişi al
+      
+      - name: Get recent changes
+        id: changes
+        run: |
+          # Son 7 gündeki değişiklikleri al
+          CHANGES=$(git log --since="7 days ago" --pretty=format:"%s" --name-only | sort -u)
+          echo "CHANGES<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Check if instructions need update
+        id: check
+        run: |
+          # Instructions dosyası 7 günden eski mi?
+          LAST_MODIFIED=$(git log -1 --format=%cd --date=relative .github/copilot-instructions.md)
+          echo "last_modified=$LAST_MODIFIED" >> $GITHUB_OUTPUT
+          
+          # Önemli dosyalarda değişiklik var mı?
+          IMPORTANT_CHANGES=$(git diff HEAD~7..HEAD --name-only | grep -E "(backend/|frontend/src/|requirements.txt|package.json)" | wc -l)
+          echo "important_changes=$IMPORTANT_CHANGES" >> $GITHUB_OUTPUT
+      
+      - name: Create update reminder issue
+        if: steps.check.outputs.important_changes > 5
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '📝 Copilot Instructions Güncelleme Zamanı',
+              body: `## 🔔 Hatırlatma
+              
+              Son 7 günde **${{ steps.check.outputs.important_changes }}** önemli dosya değiştirildi.
+              
+              \`.github/copilot-instructions.md\` dosyasını güncellemeniz önerilir.
+              
+              ### 🚀 Hızlı Güncelleme:
+              
+              1. VS Code'da chat'i açın
+              2. Şunu yazın:
+                 \`\`\`
+                 @workspace .github/prompts/update-instructions.prompt.md 
+                 dosyasındaki talimatlara göre copilot-instructions.md'yi güncelle
+                 \`\`\`
+              
+              ### 📊 Son Değişiklikler:
+              
+              \`\`\`
+              ${{ steps.changes.outputs.CHANGES }}
+              \`\`\`
+              
+              ---
+              
+              Bu issue otomatik oluşturuldu. Güncelleme yaptıktan sonra kapatabilirsiniz.`,
+              labels: ['documentation', 'automated']
+            });
