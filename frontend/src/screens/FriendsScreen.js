@@ -675,6 +675,12 @@ const FriendsScreen = ({ navigation }) => {
         );
 
       case 'sent-requests':
+        console.log('🔍 Rendering sent-requests tab, sentRequests:', sentRequests);
+        console.log('📊 sentRequests.length:', sentRequests.length);
+        sentRequests.forEach((req, idx) => {
+          console.log(`  Request ${idx}: status="${req.status}", to="${req.to_username}", id="${req.request_id}"`);
+        });
+        
         return sentRequests.length > 0 ? (
           <View>
             <Text style={styles.sectionTitle}>📤 Giden Arkadaşlık İstekleri ({sentRequests.length})</Text>

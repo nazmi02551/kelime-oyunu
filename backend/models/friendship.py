@@ -178,6 +178,7 @@ class Friendship:
                     'request_id': str(r['_id']),
                     'to_user_id': str(to_user['_id']),
                     'to_username': to_user.get('username'),
+                    'status': r.get('status', self.STATUS_PENDING),  # ✅ Status eklendi
                     'created_at': r.get('created_at')
                 })
         
