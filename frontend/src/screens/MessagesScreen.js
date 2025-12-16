@@ -8,11 +8,33 @@ import {
   StyleSheet,
   RefreshControl,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import api from '../services/api';
 import { useTheme } from '../context/ThemeContext';
+import { colors } from '../utils/colors';
+
+// GradientView component
+const GradientView = ({ colors: gradientColors, style, children }) => {
+  if (Platform.OS === 'web') {
+    return (
+      <div style={{
+        ...StyleSheet.flatten(style),
+        background: `linear-gradient(135deg, ${gradientColors[0]} 0%, ${gradientColors[1]} 100%)`,
+      }}>
+        {children}
+      </div>
+    );
+  }
+  const { LinearGradient } = require('expo-linear-gradient');
+  return (
+    <LinearGradient colors={gradientColors} style={style}>
+      {children}
+    </LinearGradient>
+  );
+};
 
 const MessagesScreen = () => {
   const navigation = useNavigation();
@@ -161,21 +183,25 @@ const MessagesScreen = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={[styles.backButton, { color: theme.colors.primary }]}>← Geri</Text>
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
-          Mesajlar {unreadCount > 0 && `(${unreadCount})`}
-        </Text>
-        <View style={styles.placeholder} />
-      </View>
+      <GradientView colors={[colors.primary, colors.secondary]} style={styles.header}>
+        <View style={styles.headerContent}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Text style={styles.backButtonText}>← Geri</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>
+            💬 Mesajlar {unreadCount > 0 && `(${unreadCount})`}
+          </Text>
+          <View style={styles.headerStats}>
+            <Text style={styles.headerStatsText}>{conversations.length}</Text>
+          </View>
+        </View>
+      </GradientView>
 
       <FlatList
         data={conversations}
         renderItem={renderConversation}
         keyExtractor={(item, index) => item.conversation_id || `conv_${index}`}
-        contentContainerStyle={conversations.length === 0 ? styles.emptyList : styles.list}
+        contentContainerStyle={conversations.length === 0 ? styles.emptyList : { flexGrow: 1, paddingBottom: 20 }}
         ListEmptyComponent={renderEmptyComponent}
         // Performance optimizations
         removeClippedSubviews={true}
@@ -205,23 +231,48 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   header: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
   },
   backButton: {
+    padding: 8,
+    minWidth: 60,
+  },
+  backButtonText: {
     fontSize: 16,
     fontWeight: '600',
+    color: '#fff',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+    flex: 1,
+    textAlign: 'center',
+  },
+  headerStats: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    minWidth: 40,
+    alignItems: 'center',
+  },
+  headerStatsText: {
+    color: '#fff',
+    fontSize: 14,
     fontWeight: 'bold',
   },
-  placeholder: {
-    width: 60,
   },
   list: {
     padding: 12,
@@ -231,7 +282,9 @@ const styles = StyleSheet.create({
   },
   conversationCard: {
     flexDirection: 'row',
-    padding: 12,
+    padding: 16,
+    minHeight: 80,
+    backgroundColor: '#fff',
     marginBottom: 8,
     borderRadius: 12,
     elevation: 2,
