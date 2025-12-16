@@ -172,21 +172,32 @@ const MultiplayerGameScreen = ({ route, navigation }) => {
   };
 
   const handleTimeUp = () => {
+    console.log('⏰ Süre doldu! answerSubmitted:', answerSubmitted);
     if (!answerSubmitted) {
+      console.log('📤 Boş cevap gönderiliyor...');
       submitAnswer(null); // Süre doldu, boş cevap gönder
     }
   };
 
   const submitAnswer = async (answer) => {
-    if (answerSubmitted) return;
+    if (answerSubmitted) {
+      console.log('⚠️ Zaten cevap gönderilmiş, işlem atlanıyor');
+      return;
+    }
     if (!game || !game.questions || currentQuestion >= game.questions.length) {
-      console.error('Geçersiz soru indexi:', currentQuestion, 'Toplam:', game?.questions?.length);
+      console.error('❌ Geçersiz soru indexi:', currentQuestion, 'Toplam:', game?.questions?.length);
       return;
     }
     
+    console.log('📝 Cevap gönderiliyor:', answer, 'Soru:', currentQuestion);
     setSelectedAnswer(answer);
     setAnswerSubmitted(true);
-    clearInterval(timerRef.current);
+    
+    // Timer'ı temizle ve null yap
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
     
     const timeTaken = questionStartTime ? (Date.now() - questionStartTime) / 1000 : 30;
     
@@ -204,27 +215,38 @@ const MultiplayerGameScreen = ({ route, navigation }) => {
         // Kısa bir bekleme sonrası sonraki soruya geç veya oyunu güncelle
         setTimeout(() => {
           if (!isLastQuestion) {
+            console.log('➡️ Sonraki soruya geçiliyor...', currentQuestion + 1);
             setCurrentQuestion(prev => prev + 1);
             setSelectedAnswer(null);
             setAnswerSubmitted(false);
+            // Timer'ı temizle ve yeniden başlat
+            if (timerRef.current) {
+              clearInterval(timerRef.current);
+              timerRef.current = null;
+            }
             startTimer();
           } else {
             // Son soruydu, oyun durumunu güncelle
+            console.log('🏁 Son soru tamamlandı!');
             showNotification('Oyun tamamlandı! Sonuçlar yükleniyor...', 'success');
             fetchGame();
           }
         }, 1500);
       } else {
+        console.error('❌ Backend hatası:', response.data.error);
         showNotification(response.data.error || 'Cevap gönderilemedi', 'error');
         setSelectedAnswer(null);
         setAnswerSubmitted(false);
+        // Timer'ı yeniden başlat (hata durumu)
+        startTimer();
       }
     } catch (error) {
-      console.error('Cevap gönderme hatası:', error);
+      console.error('❌ Cevap gönderme hatası:', error);
       showNotification('Cevap gönderilemedi', 'error');
-      // Hata durumunda state'i resetle ama ilerleme
+      // Hata durumunda state'i resetle ve timer'ı yeniden başlat
       setSelectedAnswer(null);
       setAnswerSubmitted(false);
+      startTimer();
     }
   };
 
@@ -562,9 +584,10 @@ const MultiplayerGameScreen = ({ route, navigation }) => {
                 isSelected && styles.optionSelected,
                 isCorrect && styles.optionCorrect,
                 isWrong && styles.optionWrong,
+                (answerSubmitted || timeLeft === 0) && styles.optionDisabled,
               ]}
-              onPress={() => !answerSubmitted && submitAnswer(option)}
-              disabled={answerSubmitted}
+              onPress={() => !answerSubmitted && timeLeft > 0 && submitAnswer(option)}
+              disabled={answerSubmitted || timeLeft === 0}
             >
               <Text style={[
                 styles.optionText,
@@ -916,6 +939,10 @@ const styles = {
   optionWrong: {
     borderColor: colors.danger,
     backgroundColor: colors.danger + '30',
+  },
+  optionDisabled: {
+    opacity: 0.5,
+    backgroundColor: colors.disabled || '#95a5a6',
   },
   optionText: {
     color: colors.textPrimary,
