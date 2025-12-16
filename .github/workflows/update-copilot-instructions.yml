@@ -1,9 +1,13 @@
 name: Update Copilot Instructions
 
-# Trigger: Her hafta Pazartesi veya manuel
+# Trigger: Her push, PR veya manuel
 on:
-  schedule:
-    - cron: '0 9 * * 1'  # Her Pazartesi sabah 9:00
+  push:
+    branches:
+      - main
+      - 'fixes-*'
+      - 'feature-*'
+  pull_request:
   workflow_dispatch:  # Manuel tetikleme
   
 permissions:
@@ -23,8 +27,20 @@ jobs:
       - name: Get recent changes
         id: changes
         run: |
-          # Son 7 gündeki değişiklikleri al
-          CHANGES=$(git log --since="7 days ago" --pretty=format:"%s" --name-only | sort -u)
+          # Son commit'teki değişiklikleri al
+          echo "### 📝 Değişen Dosyalar:" > changes.txt
+          git diff --name-only HEAD~1 HEAD >> changes.txt
+          
+          # Önemli değişiklikleri say
+          IMPORTANT_FILES=$(git diff --name-only HEAD~1 HEAD | grep -E "(backend/routes/|backend/models/|frontend/src/screens/|frontend/src/services/|requirements.txt|package.json|\.env)" | wc -l)
+          echo "important_count=$IMPORTANT_FILES" >> $GITHUB_OUTPUT
+          
+          # Yeni dosya/klasör eklendi mi?
+          NEW_FILES=$(git diff --name-status HEAD~1 HEAD | grep "^A" | wc -l)
+          echo "new_files=$NEW_FILES" >> $GITHUB_OUTPUT
+          
+          # Değişiklik listesi
+          CHANGES=$(cat changes.txt)
           echo "CHANGES<<EOF" >> $GITHUB_OUTPUT
           echo "$CHANGES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -32,39 +48,65 @@ jobs:
       - name: Check if instructions need update
         id: check
         run: |
-          # Instructions dosyası 7 günden eski mi?
-          LAST_MODIFIED=$(git log -1 --format=%cd --date=relative .github/copilot-instructions.md)
-          echo "last_modified=$LAST_MODIFIED" >> $GITHUB_OUTPUT
+          # Akıllı kontrol: Sadece önemli değişikliklerde bildir
+          IMPORTANT=${{ steps.changes.outputs.important_count }}
+          NEW_FILES=${{ steps.changes.outputs.new_files }}
           
-          # Önemli dosyalarda değişiklik var mı?
-          IMPORTANT_CHANGES=$(git diff HEAD~7..HEAD --name-only | grep -E "(backend/|frontend/src/|requirements.txt|package.json)" | wc -l)
-          echo "important_changes=$IMPORTANT_CHANGES" >> $GITHUB_OUTPUT
+          # Kriterler:
+          # - 3+ önemli dosya değişti VEYA
+          # - Yeni dosya/klasör eklendi
+          if [ "$IMPORTANT" -ge 3 ] || [ "$NEW_FILES" -ge 1 ]; then
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+            echo "✅ Instructions güncelleme gerekiyor!"
+          else
+            echo "needs_update=false" >> $GITHUB_OUTPUT
+            echo "⏭️ Küçük değişiklik, güncelleme gerekmiyor"
+          fi
       
       - name: Create update reminder issue
-        if: steps.check.outputs.important_changes > 5
+        if: steps.check.outputs.needs_update == 'true'
         uses: actions/github-script@v7
         with:
           script: |
+            // Aynı isimde açık issue var mı kontrol et (spam önleme)
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'copilot-update'
+            });
+            
+            if (issues.data.length > 0) {
+              console.log('⏭️ Zaten açık bir güncelleme issue var, yeni oluşturulmadı.');
+              return;
+            }
+            
+            // Yeni issue oluştur
             github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: '📝 Copilot Instructions Güncelleme Zamanı',
-              body: `## 🔔 Hatırlatma
+              title: '📝 Copilot Instructions Güncelleme Önerisi',
+              body: `## 🔔 Önemli Değişiklikler Tespit Edildi
               
-              Son 7 günde **${{ steps.check.outputs.important_changes }}** önemli dosya değiştirildi.
+              Son commit'te **${{ steps.changes.outputs.important_count }}** önemli dosya değiştirildi.
+              **${{ steps.changes.outputs.new_files }}** yeni dosya/klasör eklendi.
               
               \`.github/copilot-instructions.md\` dosyasını güncellemeniz önerilir.
               
-              ### 🚀 Hızlı Güncelleme:
+              ### 🚀 Hızlı Güncelleme (30 saniye):
               
-              1. VS Code'da chat'i açın
-              2. Şunu yazın:
-                 \`\`\`
-                 @workspace .github/prompts/update-instructions.prompt.md 
-                 dosyasındaki talimatlara göre copilot-instructions.md'yi güncelle
-                 \`\`\`
+              1. VS Code'da \`Ctrl+Shift+P\`
+              2. **"Tasks: Run Task"** seç
+              3. **"🤖 Update Copilot Instructions"** seç
+              4. Enter
               
-              ### 📊 Son Değişiklikler:
+              Veya chat'te:
+              \`\`\`
+              @workspace .github/prompts/update-instructions.prompt.md 
+              dosyasındaki talimatlara göre copilot-instructions.md'yi güncelle
+              \`\`\`
+              
+              ### 📊 Değişiklikler:
               
               \`\`\`
               ${{ steps.changes.outputs.CHANGES }}
@@ -72,6 +114,8 @@ jobs:
               
               ---
               
-              Bu issue otomatik oluşturuldu. Güncelleme yaptıktan sonra kapatabilirsiniz.`,
-              labels: ['documentation', 'automated']
+              💡 **Not:** Küçük bug fix'ler için güncelleme gerekmez. Bu issue sadece önemli değişiklikler için açılır.
+              
+              ✅ Güncelleme yaptıktan sonra bu issue'yu kapatabilirsiniz.`,
+              labels: ['documentation', 'copilot-update']
             });
