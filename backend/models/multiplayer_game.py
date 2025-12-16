@@ -338,6 +338,7 @@ class MultiplayerGame:
                 'index': i,
                 'word': q['word'],
                 'options': q['options'],
+                'meaning': q['meaning'],  # ✅ Her zaman gönder - cevap sonrası renklendirme için gerekli
                 'my_answer': q.get('player1_answer' if is_player1 else 'player2_answer'),
                 'my_correct': q.get('player1_correct' if is_player1 else 'player2_correct'),
                 'my_time': q.get('player1_time' if is_player1 else 'player2_time'),
@@ -347,7 +348,6 @@ class MultiplayerGame:
             if game['status'] == self.STATUS_COMPLETED:
                 question_data['opponent_answer'] = q.get('player2_answer' if is_player1 else 'player1_answer')
                 question_data['opponent_correct'] = q.get('player2_correct' if is_player1 else 'player1_correct')
-                question_data['correct_answer'] = q['meaning']
             
             questions.append(question_data)
         

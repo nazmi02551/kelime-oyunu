@@ -119,12 +119,18 @@ def submit_answer(current_user_id, game_id):
     try:
         data = request.get_json() or {}
         question_index = data.get('question_index')
-        answer = data.get('answer')  # None olabilir (süre doldu)
+        answer = data.get('answer')  # Boş string veya None olabilir (süre doldu)
         time_taken = data.get('time_taken', 0)
         
-        # question_index None olmamalı ama answer None olabilir (süre doldu = boş cevap)
+        print(f"📥 Answer request: question_index={question_index}, answer={repr(answer)}, time_taken={time_taken}")
+        
+        # question_index None olmamalı ama answer boş/None olabilir (süre doldu = boş cevap)
         if question_index is None:
             return jsonify({'success': False, 'error': 'Soru indeksi gerekli'}), 400
+        
+        # Boş string'i None'a çevir (Python için daha tutarlı)
+        if answer == '' or answer == 'None':
+            answer = None
         
         db = current_app.db
         mp_game = MultiplayerGame(db)

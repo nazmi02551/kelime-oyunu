@@ -66,6 +66,12 @@ const MultiplayerGameScreen = ({ route, navigation }) => {
       const response = await api.get(`/api/multiplayer/game/${gameId}`);
       if (response.data.success) {
         const gameData = response.data.game;
+        console.log('🎮 Game data yüklendi:', {
+          status: gameData.status,
+          questions_count: gameData.questions?.length,
+          has_questions: !!gameData.questions,
+          current_question: gameData.current_question
+        });
         setGame(gameData);
         
         // Oyun tamamlandıysa
@@ -184,8 +190,22 @@ const MultiplayerGameScreen = ({ route, navigation }) => {
       console.log('⚠️ Zaten cevap gönderilmiş, işlem atlanıyor');
       return;
     }
-    if (!game || !game.questions || currentQuestion >= game.questions.length) {
-      console.error('❌ Geçersiz soru indexi:', currentQuestion, 'Toplam:', game?.questions?.length);
+    
+    // Game state kontrolü - eğer game veya questions yoksa işlemi yapma
+    if (!game) {
+      console.error('❌ Game state yüklenmemiş!');
+      return;
+    }
+    
+    if (!game.questions || !Array.isArray(game.questions)) {
+      console.error('❌ Questions array bulunamadı! game:', game);
+      // Oyun durumunu yeniden yükle
+      fetchGame();
+      return;
+    }
+    
+    if (currentQuestion >= game.questions.length) {
+      console.error('❌ Geçersiz soru indexi:', currentQuestion, 'Toplam:', game.questions.length);
       return;
     }
     
@@ -202,9 +222,12 @@ const MultiplayerGameScreen = ({ route, navigation }) => {
     const timeTaken = questionStartTime ? (Date.now() - questionStartTime) / 1000 : 30;
     
     try {
+      // Süre dolmuşsa veya null ise boş string gönder (Python'da None string olarak parse edilebiliyor)
+      const answerToSend = answer === null || answer === undefined ? '' : answer;
+      
       const response = await api.post(`/api/multiplayer/answer/${gameId}`, {
         question_index: currentQuestion,
-        answer: answer,
+        answer: answerToSend,
         time_taken: timeTaken
       });
       
